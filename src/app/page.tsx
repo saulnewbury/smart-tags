@@ -11,9 +11,9 @@ type Topic = {
   id: string
   name: string // canonical
   aliases: string[]
-  embedding: number[] // centroid of summaries under this topic
-  labelEmbedding?: number[] // NEW: embedding of canonical name (used in matching)
-  summaryIds: string[] // children
+  embedding: number[] // centroid of summaries
+  labelEmbedding?: number[] // ⟵ NEW: embedding of canonical name
+  summaryIds: string[]
 }
 
 type NoteSummary = {
@@ -124,7 +124,7 @@ function normalizeTagName(s: string): string {
   t = t.replaceAll('&', ' and ')
 
   // demonyms → base nouns
-  t = t.replaceAll('israeli', 'israel').replaceAll('palestinian', 'palestine')
+  // t = t.replaceAll('israeli', 'israel').replaceAll('palestinian', 'palestine')
 
   // strip non alphanum/space
   t = t.replace(/[^a-z0-9 ]/g, ' ')
@@ -203,6 +203,11 @@ function resolveTopicByName(
     }
   }
   return best >= 0.8 ? bestId : null
+}
+
+function labelEmbeddingText(name: string): string {
+  // tiny definition string makes short labels embed more stably
+  return `topic name: ${name}\nmeaning: a subject category used to group notes about ${name}`
 }
 
 // -----------------------------
@@ -363,13 +368,26 @@ async function addNoteFlow(
   // 2) Embed the summary (subject fingerprint)
   const noteEmbedding = await embedText(apiKey, summary)
 
+  const normName = normalizeTagName(canonical_name)
+  const candidateLabelEmbedding = await embedText(
+    apiKey,
+    labelEmbeddingText(normName)
+  )
+
   // 3) Compare against existing topic centroids
   let bestTopicId: string | null = null
   let bestScore = 0
   for (const topic of Object.values(store.topics)) {
-    const s = cosineSimilarity(noteEmbedding, topicPrototype(topic))
-    if (s > bestScore) {
-      bestScore = s
+    const s_note = cosineSimilarity(noteEmbedding, topicPrototype(topic))
+    const labelProto =
+      topic.labelEmbedding && topic.labelEmbedding.length
+        ? topic.labelEmbedding
+        : topicPrototype(topic)
+    const s_label = cosineSimilarity(candidateLabelEmbedding, labelProto)
+    const s_fused = 0.5 * s_note + 0.5 * s_label
+
+    if (s_fused > bestScore) {
+      bestScore = s_fused
       bestTopicId = topic.id
     }
   }
@@ -394,7 +412,7 @@ async function addNoteFlow(
     // C) New topic with the LLM's suggested canonical name (editable later)
     topicId = uid('topic')
     const normName = normalizeTagName(canonical_name)
-    const nameEmb = await embedText(apiKey, normName)
+    const nameEmb = await embedText(apiKey, labelEmbeddingText(normName))
     const blended = averageVectors([noteEmbedding, nameEmb])
     const newTopic: Topic = {
       id: topicId,
@@ -739,7 +757,11 @@ export default function Page() {
     ;(async () => {
       let nameEmb: number[] = []
       try {
-        if (store.apiKey) nameEmb = await embedText(store.apiKey, targetName)
+        if (store.apiKey)
+          nameEmb = await embedText(
+            store.apiKey,
+            labelEmbeddingText(targetName)
+          )
       } catch {}
 
       store.setTopics((prev) => {
