@@ -133,6 +133,20 @@ function normalizeTagName(s: string): string {
   return t.replace(/\s+/g, ' ').trim()
 }
 
+function singularizeToken(w: string): string {
+  if (w.endsWith('ies')) return w.slice(0, -3) + 'y' // policies -> policy
+  if (
+    w.endsWith('ses') ||
+    w.endsWith('xes') ||
+    w.endsWith('ches') ||
+    w.endsWith('shes')
+  )
+    return w.slice(0, -2) // classes -> class, boxes -> box
+  if (w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us'))
+    return w.slice(0, -1) // relationships -> relationship
+  return w
+}
+
 const STOPWORDS = new Set([
   'the',
   'a',
@@ -154,7 +168,8 @@ const STOPWORDS = new Set([
 function tokenizeCore(s: string): string[] {
   return normalizeTagName(s)
     .split(' ')
-    .filter((w) => w && !STOPWORDS.has(w))
+    .map(singularizeToken)
+    .filter((t) => t && !STOPWORDS.has(t))
 }
 
 function sameTokenSet(a: string, b: string): boolean {
@@ -371,7 +386,7 @@ async function addNoteFlow(
   const normName = normalizeTagName(canonical_name)
   const candidateLabelEmbedding = await embedText(
     apiKey,
-    labelEmbeddingText(normName)
+    `topic name: ${normName}\nmeaning: a subject category used to group notes about ${normName}`
   )
 
   // 3) Compare against existing topic centroids
@@ -384,13 +399,34 @@ async function addNoteFlow(
         ? topic.labelEmbedding
         : topicPrototype(topic)
     const s_label = cosineSimilarity(candidateLabelEmbedding, labelProto)
-    const s_fused = 0.5 * s_note + 0.5 * s_label
+    const s_fused = 0.6 * s_label + 0.4 * s_note
 
     if (s_fused > bestScore) {
       bestScore = s_fused
       bestTopicId = topic.id
     }
   }
+
+  const T_LABEL = 0.86
+  const T_NOTE = 0.72
+  const T_FUSED = 0.8
+
+  const bestTopic = bestTopicId ? store.topics[bestTopicId] : null
+  const s_note_best = bestTopic
+    ? cosineSimilarity(noteEmbedding, topicPrototype(bestTopic))
+    : 0
+  const labelProtoBest = bestTopic?.labelEmbedding?.length
+    ? bestTopic!.labelEmbedding!
+    : bestTopic
+    ? topicPrototype(bestTopic)
+    : []
+  const s_label_best = bestTopic
+    ? cosineSimilarity(candidateLabelEmbedding, labelProtoBest)
+    : 0
+
+  const accepted =
+    !!bestTopic &&
+    (s_label_best >= T_LABEL || s_note_best >= T_NOTE || bestScore >= T_FUSED)
 
   // 4) Create note
   const noteId = uid('note')
@@ -400,12 +436,12 @@ async function addNoteFlow(
   let matchedExisting = false
 
   // A) Name/alias resolution first (handles hyphens, case, order)
-  const nameResolvedId = resolveTopicByName(canonical_name, store.topics)
+  const nameResolvedId = resolveTopicByName(normName, store.topics)
   if (nameResolvedId) {
     topicId = nameResolvedId
     matchedExisting = true
-  } else if (bestTopicId && bestScore >= SIMILARITY_THRESHOLD) {
-    // B) Embedding similarity match
+  } else if (bestTopicId && accepted) {
+    // B) Label+note similarity match
     topicId = bestTopicId
     matchedExisting = true
   } else {
