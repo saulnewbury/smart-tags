@@ -360,7 +360,7 @@ function useStore() {
 // -----------------------------
 
 // const SIMILARITY_THRESHOLD = 0.74 // tune for your content
-const SIMILARITY_THRESHOLD = 0.55 // tune for your content
+const SIMILARITY_THRESHOLD = 0.58 // tune for your content
 
 async function addNoteFlow(
   params: {
@@ -405,7 +405,8 @@ async function addNoteFlow(
         ? topic.labelEmbedding
         : topicPrototype(topic)
     const s_label = cosineSimilarity(candidateLabelEmbedding, labelProto)
-    const s_fused = 0.5 * s_note + 0.5 * s_label
+    // const s_fused = 0.5 * s_note + 0.5 * s_label
+    const s_fused = 0.7 * s_note + 0.3 * s_label
 
     if (s_fused > bestScore) {
       bestScore = s_fused
