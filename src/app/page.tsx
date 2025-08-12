@@ -133,6 +133,34 @@ function normalizeTagName(s: string): string {
   return t.replace(/\s+/g, ' ').trim()
 }
 
+function stemWord(word: string): string {
+  // Basic English stemmer (Porter-inspired, simplified for prototype)
+  if (word.length < 3) return word
+  word = word.toLowerCase()
+
+  // Remove common suffixes
+  if (word.endsWith('ies')) return word.slice(0, -3) + 'y'
+  if (word.endsWith('es') || word.endsWith('ed') || word.endsWith('ing'))
+    return word.slice(0, -2)
+  if (
+    word.endsWith('s') ||
+    word.endsWith('ly') ||
+    word.endsWith('ment') ||
+    word.endsWith('ness')
+  )
+    return word.slice(0, -1)
+
+  // Handle doubles (e.g., stopping → stop)
+  if (
+    /[bcdfghjklmnpqrstvwxyz]/.test(word.slice(-1)) &&
+    word.slice(-2, -1) === word.slice(-1)
+  ) {
+    word = word.slice(0, -1)
+  }
+
+  return word
+}
+
 const STOPWORDS = new Set([
   'the',
   'a',
@@ -155,6 +183,7 @@ function tokenizeCore(s: string): string[] {
   return normalizeTagName(s)
     .split(' ')
     .filter((w) => w && !STOPWORDS.has(w))
+    .map(stemWord) // ⟵ NEW: Stem each token
 }
 
 function sameTokenSet(a: string, b: string): boolean {
@@ -202,7 +231,8 @@ function resolveTopicByName(
       bestId = t.id
     }
   }
-  return best >= 0.8 ? bestId : null
+  // return best >= 0.8 ? bestId : null
+  return best >= 0.6 ? bestId : null
 }
 
 function labelEmbeddingText(name: string): string {
@@ -325,22 +355,12 @@ function useStore() {
   }
 }
 
-function findTopicIdByCanonicalName(
-  name: string,
-  topics: Record<string, Topic>
-): string | null {
-  const norm = normalizeTagName(name)
-  for (const t of Object.values(topics))
-    if (normalizeTagName(t.name) === norm) return t.id
-  return null
-}
-
 // -----------------------------
 // Core: add note (summarize → embed → match topic → save)
 // -----------------------------
 
 // const SIMILARITY_THRESHOLD = 0.74 // tune for your content
-const SIMILARITY_THRESHOLD = 0.6 // tune for your content
+const SIMILARITY_THRESHOLD = 0.55 // tune for your content
 
 async function addNoteFlow(
   params: {
