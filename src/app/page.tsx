@@ -339,7 +339,8 @@ function findTopicIdByCanonicalName(
 // Core: add note (summarize → embed → match topic → save)
 // -----------------------------
 
-const SIMILARITY_THRESHOLD = 0.74 // tune for your content
+// const SIMILARITY_THRESHOLD = 0.74 // tune for your content
+const SIMILARITY_THRESHOLD = 0.6 // tune for your content
 
 async function addNoteFlow(
   params: {
