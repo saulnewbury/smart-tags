@@ -360,7 +360,7 @@ function useStore() {
 // -----------------------------
 
 // const SIMILARITY_THRESHOLD = 0.74 // tune for your content
-const SIMILARITY_THRESHOLD = 0.58 // tune for your content
+const SIMILARITY_THRESHOLD = 0.56 // tune for your content
 
 async function addNoteFlow(
   params: {
