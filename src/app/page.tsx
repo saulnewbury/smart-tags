@@ -535,7 +535,7 @@ function Sidebar(props: {
         <div className='font-semibold'>Summaries</div>
         <button
           onClick={props.onCreateNew}
-          className='inline-flex items-center gap-2 rounded-xl border px-2 py-1 hover:bg-gray-50'
+          className='inline-flex items-center gap-2 rounded-xl border px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800'
         >
           <Plus className='h-4 w-4' /> New
         </button>
@@ -543,7 +543,7 @@ function Sidebar(props: {
       <div className='overflow-y-auto'>
         {groups.map(({ topic, notes }) => (
           <div key={topic.id} className='border-b'>
-            <div className='px-3 py-2 text-sm font-medium bg-gray-50 flex items-center gap-2'>
+            <div className='px-3 py-2 text-sm font-medium bg-gray-50 dark:bg-black flex items-center gap-2'>
               <Tag className='h-4 w-4' /> {topic.name}
               <span className='ml-auto text-xs text-gray-500'>
                 {notes.length}
@@ -554,8 +554,10 @@ function Sidebar(props: {
                 <li key={n.id}>
                   <button
                     onClick={() => props.onSelectNote(n.id)}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                      props.selectedNoteId === n.id ? 'bg-gray-100' : ''
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                      props.selectedNoteId === n.id
+                        ? 'bg-gray-100 dark:bg-gray-800'
+                        : ''
                     }`}
                   >
                     {trimTitle(n.summary)}
@@ -584,6 +586,9 @@ function DetailView(props: {
   onRenameTopic: (newName: string) => void
   onResummarize?: () => void
 }) {
+  const [name, setName] = useState(props.topic.name)
+  useEffect(() => setName(props.topic!.name), [props.topic])
+
   if (!props.note || !props.topic) {
     return (
       <div className='flex-1 h-screen flex items-center justify-center text-gray-500'>
@@ -591,9 +596,6 @@ function DetailView(props: {
       </div>
     )
   }
-
-  const [name, setName] = useState(props.topic.name)
-  useEffect(() => setName(props.topic!.name), [props.topic])
 
   return (
     <div className='flex-1 h-screen overflow-y-auto'>
@@ -605,7 +607,7 @@ function DetailView(props: {
         />
         <button
           onClick={() => props.onRenameTopic(name)}
-          className='inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-gray-50'
+          className='inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800'
         >
           <Save className='h-4 w-4' /> Save Tag Name
         </button>
@@ -634,7 +636,7 @@ function DetailView(props: {
 
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>Summary</div>
-          <pre className='whitespace-pre-wrap text-sm leading-6 bg-gray-50 p-3 rounded-lg border'>
+          <pre className='whitespace-pre-wrap text-sm leading-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
             {props.note.summary}
           </pre>
         </div>
@@ -645,7 +647,7 @@ function DetailView(props: {
             {props.note.keywords.map((k, i) => (
               <span
                 key={i}
-                className='text-xs border rounded-full px-2 py-1 bg-white'
+                className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800'
               >
                 {k}
               </span>
@@ -720,7 +722,7 @@ function NewSummarizer(props: {
           <button
             disabled={props.busy || !props.apiKey || !transcript.trim()}
             onClick={() => props.onCreate({ transcript, prompt })}
-            className='inline-flex items-center gap-2 rounded-xl border px-4 py-2 hover:bg-gray-50 disabled:opacity-50'
+            className='inline-flex items-center gap-2 rounded-xl border px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50'
           >
             <Plus className='h-4 w-4' /> Summarize & Tag
           </button>
