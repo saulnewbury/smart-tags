@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plus, Save, Tag, RefreshCw } from 'lucide-react'
+import { Plus, Save, Tag, RefreshCw, Trash } from 'lucide-react'
 
 // -----------------------------
 // Types
@@ -33,8 +33,7 @@ type NoteSummary = {
 
 const LS_KEYS = {
   topics: 'gist-topics',
-  summaries: 'gist-summaries',
-  apiKey: 'gist-openai-key'
+  summaries: 'gist-summaries'
 }
 
 function loadTopics(): Record<string, Topic> {
@@ -244,11 +243,12 @@ function labelEmbeddingText(name: string): string {
 // OpenAI helpers (client-side, for prototyping only)
 // -----------------------------
 
+const API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY || ''
+
 const SUMMARIZE_MODEL = 'gpt-4o-mini' // fast & inexpensive for prototyping
 const EMBEDDING_MODEL = 'text-embedding-3-small' // great quality/cost
 
 async function summarizeToJSON(
-  apiKey: string,
   transcript: string,
   userPrompt: string
 ): Promise<{ summary: string; canonical_name: string; keywords: string[] }> {
@@ -266,7 +266,7 @@ Return STRICT JSON with keys: summary, canonical_name, keywords (array).
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
+      Authorization: `Bearer ${API_KEY}`
     },
     body: JSON.stringify({
       model: SUMMARIZE_MODEL,
@@ -301,12 +301,12 @@ Return STRICT JSON with keys: summary, canonical_name, keywords (array).
   }
 }
 
-async function embedText(apiKey: string, text: string): Promise<number[]> {
+async function embedText(text: string): Promise<number[]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
+      Authorization: `Bearer ${API_KEY}`
     },
     body: JSON.stringify({
       model: EMBEDDING_MODEL,
@@ -329,29 +329,20 @@ async function embedText(apiKey: string, text: string): Promise<number[]> {
 function useStore() {
   const [topics, setTopics] = useState<Record<string, Topic>>({})
   const [summaries, setSummaries] = useState<Record<string, NoteSummary>>({})
-  const [apiKey, setApiKey] = useState<string>('')
 
   useEffect(() => {
     setTopics(loadTopics())
     setSummaries(loadSummaries())
-    setApiKey(localStorage.getItem(LS_KEYS.apiKey) || '')
   }, [])
 
   useEffect(() => saveTopics(topics), [topics])
   useEffect(() => saveSummaries(summaries), [summaries])
 
-  function persistApiKey(key: string) {
-    setApiKey(key)
-    localStorage.setItem(LS_KEYS.apiKey, key)
-  }
-
   return {
     topics,
     setTopics,
     summaries,
-    setSummaries,
-    apiKey,
-    persistApiKey
+    setSummaries
   }
 }
 
@@ -360,11 +351,10 @@ function useStore() {
 // -----------------------------
 
 // const SIMILARITY_THRESHOLD = 0.74 // tune for your content
-const SIMILARITY_THRESHOLD = 0.55 // tune for your content
+const SIMILARITY_THRESHOLD = 0.56 // tune for your content
 
 async function addNoteFlow(
   params: {
-    apiKey: string
     transcript: string
     userPrompt: string
   },
@@ -377,23 +367,19 @@ async function addNoteFlow(
     >
   }
 ) {
-  const { apiKey, transcript, userPrompt } = params
+  const { transcript, userPrompt } = params
 
   // 1) Summarize & get initial canonical suggestion
   const { summary, canonical_name, keywords } = await summarizeToJSON(
-    apiKey,
     transcript,
     userPrompt
   )
 
   // 2) Embed the summary (subject fingerprint)
-  const noteEmbedding = await embedText(apiKey, summary)
+  const noteEmbedding = await embedText(summary)
 
   const normName = normalizeTagName(canonical_name)
-  const candidateLabelEmbedding = await embedText(
-    apiKey,
-    labelEmbeddingText(normName)
-  )
+  const candidateLabelEmbedding = await embedText(labelEmbeddingText(normName))
 
   // 3) Compare against existing topic centroids
   let bestTopicId: string | null = null
@@ -434,7 +420,7 @@ async function addNoteFlow(
     // C) New topic with the LLM's suggested canonical name (editable later)
     topicId = uid('topic')
     const normName = normalizeTagName(canonical_name)
-    const nameEmb = await embedText(apiKey, labelEmbeddingText(normName))
+    const nameEmb = await embedText(labelEmbeddingText(normName))
     const blended = averageVectors([noteEmbedding, nameEmb])
     const newTopic: Topic = {
       id: topicId,
@@ -508,6 +494,7 @@ function Sidebar(props: {
   summaries: Record<string, NoteSummary>
   onSelectNote: (id: string) => void
   onCreateNew: () => void
+  onClearAll: () => void
   selectedNoteId?: string | null
 }) {
   const groups = useMemo(() => {
@@ -533,12 +520,20 @@ function Sidebar(props: {
     <div className='w-80 shrink-0 border-r h-screen flex flex-col'>
       <div className='p-3 border-b flex items-center justify-between'>
         <div className='font-semibold'>Summaries</div>
-        <button
-          onClick={props.onCreateNew}
-          className='inline-flex items-center gap-2 rounded-xl border px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800'
-        >
-          <Plus className='h-4 w-4' /> New
-        </button>
+        <div className='flex items-center gap-2'>
+          <button
+            onClick={props.onCreateNew}
+            className='inline-flex items-center gap-2 rounded-xl border px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800'
+          >
+            <Plus className='h-4 w-4' /> New
+          </button>
+          <button
+            onClick={props.onClearAll}
+            className='inline-flex items-center gap-2 rounded-xl border px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800 text-red-600'
+          >
+            <Trash className='h-4 w-4' /> Clear All
+          </button>
+        </div>
       </div>
       <div className='overflow-y-auto'>
         {groups.map(({ topic, notes }) => (
@@ -660,35 +655,17 @@ function DetailView(props: {
 }
 
 function NewSummarizer(props: {
-  apiKey: string
-  onSetApiKey: (k: string) => void
   onCreate: (args: { transcript: string; prompt: string }) => Promise<void>
   busy: boolean
   error: string | null
 }) {
   const [transcript, setTranscript] = useState('')
   const [prompt, setPrompt] = useState('')
-  const [showKey, setShowKey] = useState(false)
 
   return (
     <div className='flex-1 h-screen overflow-y-auto'>
       <div className='p-4 border-b flex items-center gap-2'>
         <div className='font-semibold'>New Transcript</div>
-        <div className='ml-auto flex items-center gap-2'>
-          <input
-            type={showKey ? 'text' : 'password'}
-            placeholder='OpenAI API Key'
-            value={props.apiKey}
-            onChange={(e) => props.onSetApiKey(e.target.value)}
-            className='border rounded-lg px-3 py-2 w-80'
-          />
-          <button
-            onClick={() => setShowKey((s) => !s)}
-            className='text-xs underline'
-          >
-            {showKey ? 'Hide' : 'Show'}
-          </button>
-        </div>
       </div>
 
       <div className='p-6 space-y-6'>
@@ -720,7 +697,7 @@ function NewSummarizer(props: {
 
         <div className='flex gap-3'>
           <button
-            disabled={props.busy || !props.apiKey || !transcript.trim()}
+            disabled={props.busy || !transcript.trim()}
             onClick={() => props.onCreate({ transcript, prompt })}
             className='inline-flex items-center gap-2 rounded-xl border px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50'
           >
@@ -754,11 +731,8 @@ export default function Page() {
     setBusy(true)
     setError(null)
     try {
-      if (!store.apiKey)
-        throw new Error('Please enter your OpenAI API key (top right).')
       const { noteId } = await addNoteFlow(
         {
-          apiKey: store.apiKey,
           transcript: args.transcript,
           userPrompt: args.prompt
         },
@@ -781,11 +755,7 @@ export default function Page() {
     ;(async () => {
       let nameEmb: number[] = []
       try {
-        if (store.apiKey)
-          nameEmb = await embedText(
-            store.apiKey,
-            labelEmbeddingText(targetName)
-          )
+        nameEmb = await embedText(labelEmbeddingText(targetName))
       } catch {}
 
       store.setTopics((prev) => {
@@ -798,6 +768,21 @@ export default function Page() {
         return { ...prev, [sourceId]: t }
       })
     })()
+  }
+
+  function handleClearAll() {
+    if (
+      !confirm(
+        'Are you sure you want to clear all data from local storage? This cannot be undone.'
+      )
+    )
+      return
+    localStorage.removeItem(LS_KEYS.topics)
+    localStorage.removeItem(LS_KEYS.summaries)
+    store.setTopics({})
+    store.setSummaries({})
+    setSelectedNoteId(null)
+    setCreating(true)
   }
 
   return (
@@ -814,16 +799,11 @@ export default function Page() {
           setCreating(true)
           setSelectedNoteId(null)
         }}
+        onClearAll={handleClearAll}
       />
 
       {creating ? (
-        <NewSummarizer
-          apiKey={store.apiKey}
-          onSetApiKey={store.persistApiKey}
-          onCreate={handleCreate}
-          busy={busy}
-          error={error}
-        />
+        <NewSummarizer onCreate={handleCreate} busy={busy} error={error} />
       ) : (
         <DetailView
           note={selectedNote}
