@@ -75,6 +75,18 @@ export default function Page() {
     })()
   }
 
+  function handleUpdateDisplayTag(newDisplayTag: string) {
+    if (!selectedTopic) return
+    const sourceId = selectedTopic.id
+    const trimmedTag = newDisplayTag.trim()
+
+    store.setTopics((prev) => {
+      const t = { ...prev[sourceId] } as Topic
+      t.displayTag = trimmedTag
+      return { ...prev, [sourceId]: t }
+    })
+  }
+
   function handleClearAll() {
     if (
       !confirm(
@@ -113,6 +125,7 @@ export default function Page() {
           note={selectedNote}
           topic={selectedTopic}
           onRenameTopic={handleRenameTopic}
+          onUpdateDisplayTag={handleUpdateDisplayTag}
         />
       )}
     </div>

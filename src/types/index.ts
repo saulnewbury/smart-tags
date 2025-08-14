@@ -2,10 +2,11 @@
 
 export type Topic = {
   id: string
-  name: string // canonical
+  name: string // semantic fingerprint (canonical)
+  displayTag: string // human-readable tag for organization
   aliases: string[]
   embedding: number[] // centroid of summaries
-  labelEmbedding?: number[] // embedding of canonical name
+  labelEmbedding?: number[] // embedding of canonical name (fingerprint)
   summaryIds: string[]
 }
 
@@ -16,7 +17,7 @@ export type NoteSummary = {
   summary: string
   embedding: number[] // embedding of the summary text
   topicId: string // foreign key -> Topic.id
-  canonicalSuggested: string // LLM's first guess
+  canonicalSuggested: string // LLM's first guess (semantic fingerprint)
   keywords: string[]
 }
 
