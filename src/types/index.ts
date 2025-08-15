@@ -1,5 +1,16 @@
 // types/index.ts
 
+export type SuperCategory = {
+  id: string
+  name: string // semantic fingerprint for broad category matching
+  displayTag: string // human-readable super category name
+  aliases: string[]
+  embedding: number[] // embedding of the semantic fingerprint
+  labelEmbedding?: number[] // embedding of canonical name
+  topicIds: string[] // topics that belong to this super category
+  color?: string // optional color for visual organization
+}
+
 export type Topic = {
   id: string
   name: string // semantic fingerprint (canonical)
@@ -8,6 +19,7 @@ export type Topic = {
   embedding: number[] // centroid of summaries
   labelEmbedding?: number[] // embedding of canonical name (fingerprint)
   summaryIds: string[]
+  superCategoryId?: string // foreign key -> SuperCategory.id
 }
 
 export type NoteSummary = {
@@ -32,6 +44,10 @@ export interface StoreState {
   summaries: Record<string, NoteSummary>
   setSummaries: React.Dispatch<
     React.SetStateAction<Record<string, NoteSummary>>
+  >
+  superCategories: Record<string, SuperCategory>
+  setSuperCategories: React.Dispatch<
+    React.SetStateAction<Record<string, SuperCategory>>
   >
 }
 

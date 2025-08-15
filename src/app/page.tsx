@@ -3,13 +3,16 @@
 'use client'
 
 import React, { useState } from 'react'
-import type { Topic, NoteSummary, CreateArgs } from '../types'
+import type { Topic, NoteSummary, SuperCategory, CreateArgs } from '../types'
 import { useStore } from '@/hooks/useStore'
 import { addNoteFlow } from '@/services/addNote'
 import { fetchTranscript } from '@/services/transcript'
 import { clearAllData } from '@/utils/storage'
+import { clearSuperCategories } from '@/utils/superCategoryStorage'
 import { normalizeTagName, labelEmbeddingText } from '@/utils/textProcessing'
 import { embedText } from '@/utils/openai'
+import { createSuperCategory } from '@/services/superCategory'
+import { uid } from '@/utils/storage'
 import { Sidebar } from '@/components/Sidebar'
 import { DetailView } from '@/components/DetailView'
 import { NewSummarizer } from '@/components/NewSummarizer'
@@ -27,6 +30,10 @@ export default function Page() {
   const selectedTopic: Topic | null = selectedNote
     ? store.topics[selectedNote.topicId] || null
     : null
+  const selectedSuperCategory: SuperCategory | null =
+    selectedTopic?.superCategoryId
+      ? store.superCategories[selectedTopic.superCategoryId] || null
+      : null
 
   async function handleCreate(args: CreateArgs) {
     setBusy(true)
@@ -87,6 +94,32 @@ export default function Page() {
     })
   }
 
+  function handleUpdateSuperCategory(superCategoryId: string | null) {
+    if (!selectedTopic) return
+    const topicId = selectedTopic.id
+
+    store.setTopics((prev) => {
+      const t = { ...prev[topicId] } as Topic
+      t.superCategoryId = superCategoryId
+      return { ...prev, [topicId]: t }
+    })
+  }
+
+  async function handleCreateSuperCategory(
+    name: string,
+    displayTag: string
+  ): Promise<string> {
+    const superCategory = await createSuperCategory(name, displayTag)
+    const superCategoryId = superCategory.id
+
+    store.setSuperCategories((prev) => ({
+      ...prev,
+      [superCategoryId]: superCategory
+    }))
+
+    return superCategoryId
+  }
+
   function handleClearAll() {
     if (
       !confirm(
@@ -95,8 +128,10 @@ export default function Page() {
     )
       return
     clearAllData()
+    clearSuperCategories()
     store.setTopics({})
     store.setSummaries({})
+    store.setSuperCategories({})
     setSelectedNoteId(null)
     setCreating(true)
   }
@@ -124,8 +159,12 @@ export default function Page() {
         <DetailView
           note={selectedNote}
           topic={selectedTopic}
+          superCategory={selectedSuperCategory}
+          superCategories={store.superCategories}
           onRenameTopic={handleRenameTopic}
           onUpdateDisplayTag={handleUpdateDisplayTag}
+          onUpdateSuperCategory={handleUpdateSuperCategory}
+          onCreateSuperCategory={handleCreateSuperCategory}
         />
       )}
     </div>

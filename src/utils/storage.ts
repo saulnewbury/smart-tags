@@ -4,7 +4,8 @@ import type { Topic, NoteSummary } from '../types'
 
 export const LS_KEYS = {
   topics: 'gist-topics',
-  summaries: 'gist-summaries'
+  summaries: 'gist-summaries',
+  superCategories: 'gist-super-categories' // Added this
 }
 
 export function loadTopics(): Record<string, Topic> {
@@ -42,4 +43,5 @@ export function uid(prefix = 'id'): string {
 export function clearAllData() {
   localStorage.removeItem(LS_KEYS.topics)
   localStorage.removeItem(LS_KEYS.summaries)
+  localStorage.removeItem(LS_KEYS.superCategories) // Added this
 }
