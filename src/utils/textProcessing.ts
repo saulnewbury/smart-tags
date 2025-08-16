@@ -1,6 +1,6 @@
 // utils/textProcessing.ts
 
-import type { Topic } from '../types'
+import type { Topic, Category } from '../types'
 
 export function normalizeTagName(s: string): string {
   // lowercase first so replacements are simple
@@ -121,6 +121,38 @@ export function resolveTopicByName(
     if (s > best) {
       best = s
       bestId = t.id
+    }
+  }
+  return best >= 0.6 ? bestId : null
+}
+
+// Add to textProcessing.ts
+
+export function resolveCategoryByName(
+  candidate: string,
+  categories: Record<string, Category>
+): string | null {
+  const norm = normalizeTagName(candidate)
+
+  // 1) exact normalized name or alias
+  for (const c of Object.values(categories)) {
+    if (normalizeTagName(c.name) === norm) return c.id
+    if ((c.aliases || []).some((a) => normalizeTagName(a) === norm)) return c.id
+  }
+
+  // 2) exact token set (order-insensitive)
+  for (const c of Object.values(categories)) {
+    if (sameTokenSet(c.name, candidate)) return c.id
+  }
+
+  // 3) high token overlap for tiny wording diffs
+  let bestId: string | null = null,
+    best = 0
+  for (const c of Object.values(categories)) {
+    const s = jaccardTokenSim(c.name, candidate)
+    if (s > best) {
+      best = s
+      bestId = c.id
     }
   }
   return best >= 0.6 ? bestId : null

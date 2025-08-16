@@ -1,6 +1,6 @@
 // utils/vectorMath.ts
 
-import type { Topic } from '../types'
+import type { Topic, Category } from '../types'
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (!a.length || !b.length || a.length !== b.length) return 0
@@ -30,4 +30,10 @@ export function topicPrototype(t: Topic): number[] {
   return t.labelEmbedding && t.labelEmbedding.length
     ? averageVectors([t.embedding, t.labelEmbedding])
     : t.embedding
+}
+
+export function categoryPrototype(c: Category): number[] {
+  return c.labelEmbedding && c.labelEmbedding.length
+    ? averageVectors([c.embedding, c.labelEmbedding])
+    : c.embedding
 }

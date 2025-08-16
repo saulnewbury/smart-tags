@@ -1,5 +1,15 @@
 // types/index.ts
 
+export type Category = {
+  id: string
+  name: string // semantic fingerprint (canonical)
+  displayTag: string // human-readable tag for organization
+  aliases: string[]
+  embedding: number[] // centroid of child topics' prototypes
+  labelEmbedding?: number[] // embedding of canonical name
+  topicIds: string[] // foreign keys -> Topic.id
+}
+
 export type Topic = {
   id: string
   name: string // semantic fingerprint (canonical)
@@ -8,6 +18,7 @@ export type Topic = {
   embedding: number[] // centroid of summaries
   labelEmbedding?: number[] // embedding of canonical name (fingerprint)
   summaryIds: string[]
+  categoryId: string
 }
 
 export type NoteSummary = {
@@ -33,6 +44,8 @@ export interface StoreState {
   setSummaries: React.Dispatch<
     React.SetStateAction<Record<string, NoteSummary>>
   >
+  categories: Record<string, Category>
+  setCategories: React.Dispatch<React.SetStateAction<Record<string, Category>>>
 }
 
 export interface CreateArgs {
