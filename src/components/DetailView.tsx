@@ -126,6 +126,22 @@ export function DetailView(props: DetailViewProps) {
             ))}
           </div>
         </div>
+
+        <div>
+          <div className='text-xs uppercase text-gray-500 mb-2'>
+            Subjects (Super Categories)
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            {props.note.subjects?.map((s, i) => (
+              <span
+                key={i}
+                className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600'
+              >
+                {s}
+              </span>
+            )) || null}
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -20,7 +20,7 @@ export async function addNoteFlow(params: CreateNoteParams, store: StoreState) {
   const { transcript, userPrompt } = params
 
   // 1) Summarize & get initial canonical suggestion
-  const { summary, canonical_name, keywords } = await summarizeToJSON(
+  const { summary, canonical_name, keywords, subjects } = await summarizeToJSON(
     transcript,
     userPrompt
   )
@@ -109,7 +109,8 @@ export async function addNoteFlow(params: CreateNoteParams, store: StoreState) {
     embedding: noteEmbedding,
     topicId,
     canonicalSuggested: canonical_name,
-    keywords
+    keywords,
+    subjects // Add this
   }
   store.setSummaries((prev) => ({ ...prev, [noteId]: newNote }))
 

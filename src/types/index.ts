@@ -44,4 +44,5 @@ export interface APIResponse {
   summary: string
   canonical_name: string
   keywords: string[]
+  subjects: string[]
 }

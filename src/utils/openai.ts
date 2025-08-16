@@ -9,12 +9,14 @@ const EMBEDDING_MODEL = 'text-embedding-3-small' // great quality/cost
 export async function summarizeToJSON(
   transcript: string,
   userPrompt: string
-): Promise<APIResponse> {
+): Promise<APIResponse & { subjects: string[] }> {
+  // Updated return type to include subjects
   const system = `You are a precise note summarizer for a tagging app. 
-Return STRICT JSON with keys: summary, canonical_name, keywords (array). 
+Return STRICT JSON with keys: summary, canonical_name, keywords (array), subjects (array). 
 - summary: 4-6 tight sentences (or 6-10 bullets if source is long).
 - canonical_name: the single best subject label for this note (neutral, general), no hashtags.
-- keywords: 5-12 short items (entities, noun phrases, actions).`
+- keywords: 5-12 short items (entities, noun phrases, actions).
+- subjects: 1-5 broader super categories that the canonical_name fits into (e.g., 'politics' for 'israel palestine conflict').` // Added this line for the new 'subjects' key
 
   const user = `TRANSCRIPT:\n${transcript}\n\nEXTRA INSTRUCTIONS FROM USER (optional): ${
     userPrompt || '(none)'
@@ -48,13 +50,15 @@ Return STRICT JSON with keys: summary, canonical_name, keywords (array).
     const parsed = JSON.parse(content)
     if (!parsed.summary || !parsed.canonical_name) throw new Error('Bad JSON')
     parsed.keywords = Array.isArray(parsed.keywords) ? parsed.keywords : []
+    parsed.subjects = Array.isArray(parsed.subjects) ? parsed.subjects : [] // Added fallback for subjects
     return parsed
   } catch (e) {
     // Fallback: wrap plain text into JSON-ish object
     return {
       summary: content,
       canonical_name: 'general',
-      keywords: []
+      keywords: [],
+      subjects: [] // Added to fallback
     }
   }
 }
