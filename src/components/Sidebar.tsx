@@ -1,9 +1,7 @@
-// components/Sidebar.tsx
-
 import React, { useMemo } from 'react'
 import { Plus, Tag, Trash } from 'lucide-react'
 import type { Topic, NoteSummary } from '../types'
-import { trimTitle } from '../utils/textProcessing'
+import { trimTitle, normalizeTagName } from '../utils/textProcessing'
 
 interface SidebarProps {
   topics: Record<string, Topic>
@@ -16,25 +14,39 @@ interface SidebarProps {
 
 export function Sidebar(props: SidebarProps) {
   const groups = useMemo(() => {
-    const out: { topic: Topic; notes: NoteSummary[] }[] = []
+    const out: { label: string; topicIds: string[]; notes: NoteSummary[] }[] =
+      []
     const map = props.topics
     const sums = props.summaries
-    const byTopic: Record<string, NoteSummary[]> = {}
+
+    // Group notes by normalized label (displayTag || name)
+    const byLabel: Record<
+      string,
+      { topicIds: string[]; notes: NoteSummary[] }
+    > = {}
     for (const s of Object.values(sums)) {
-      ;(byTopic[s.topicId] ||= []).push(s)
+      const topic = map[s.topicId]
+      if (!topic) continue // Skip if topic is missing
+      const label = normalizeTagName(topic.displayTag || topic.name)
+      if (!byLabel[label]) {
+        byLabel[label] = { topicIds: [], notes: [] }
+      }
+      byLabel[label].topicIds.push(s.topicId)
+      byLabel[label].notes.push(s)
     }
-    for (const t of Object.values(map)) {
-      const notes = (byTopic[t.id] || []).sort(
-        (a, b) => b.createdAt - a.createdAt
-      )
-      out.push({ topic: t, notes })
+
+    // Create sorted groups for display
+    for (const [label, { topicIds, notes }] of Object.entries(byLabel)) {
+      out.push({
+        label,
+        topicIds,
+        notes: notes.sort((a, b) => b.createdAt - a.createdAt) // Sort notes by creation date
+      })
     }
-    // sort topics by display tag (human-readable), fallback to name if displayTag missing
-    out.sort((a, b) => {
-      const aTag = a.topic.displayTag || a.topic.name
-      const bTag = b.topic.displayTag || b.topic.name
-      return aTag.localeCompare(bTag)
-    })
+
+    // Sort groups alphabetically by label
+    out.sort((a, b) => a.label.localeCompare(b.label))
+
     return out
   }, [props.topics, props.summaries])
 
@@ -58,15 +70,15 @@ export function Sidebar(props: SidebarProps) {
         </div>
       </div>
       <div className='overflow-y-auto'>
-        {groups.map(({ topic, notes }) => (
-          <div key={topic.id} className='border-b'>
+        {groups.map(({ label, topicIds, notes }) => (
+          <div key={label} className='border-b'>
             <div className='px-3 py-2 text-sm font-medium bg-gray-50 dark:bg-black flex items-center gap-2'>
               <Tag className='h-4 w-4' />
-              <span className='text-blue-600 font-semibold'>
-                {topic.displayTag || topic.name}
-              </span>
-              {topic.displayTag && topic.displayTag !== topic.name && (
-                <span className='text-xs text-gray-400'>({topic.name})</span>
+              <span className='text-blue-600 font-semibold'>{label}</span>
+              {topicIds.length > 1 && (
+                <span className='text-xs text-gray-400'>
+                  (merged {topicIds.length} topics)
+                </span>
               )}
               <span className='ml-auto text-xs text-gray-500'>
                 {notes.length}
