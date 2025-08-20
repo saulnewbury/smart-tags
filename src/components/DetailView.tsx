@@ -129,19 +129,34 @@ export function DetailView(props: DetailViewProps) {
 
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>
-            Subjects (Super Categories)
+            Primary Super Category
           </div>
           <div className='flex flex-wrap gap-2'>
-            {props.note.subjects?.map((s, i) => (
-              <span
-                key={i}
-                className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600'
-              >
-                {s}
+            {props.note.subjects?.[0] ? (
+              <span className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600 font-semibold'>
+                {props.note.subjects[0]}
               </span>
-            )) || null}
+            ) : null}
           </div>
         </div>
+
+        {props.note.subjects && props.note.subjects.length > 1 && (
+          <div>
+            <div className='text-xs uppercase text-gray-500 mb-2'>
+              Secondary Super Categories
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              {props.note.subjects.slice(1).map((s, i) => (
+                <span
+                  key={i}
+                  className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600'
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
