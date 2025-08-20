@@ -16,7 +16,16 @@ Return STRICT JSON with keys: summary, canonical_name, keywords (array), subject
 - summary: 4-6 tight sentences (or 6-10 bullets if source is long).
 - canonical_name: the single best subject label for this note (neutral, general), no hashtags.
 - keywords: 5-12 short items (entities, noun phrases, actions).
-- subjects: 1-5 broader super categories that the canonical_name fits into (e.g., 'politics' for 'israel palestine conflict').` // Added this line for the new 'subjects' key
+- subjects: Select the 1-3 most fitting super-categories from this predefined list (based on the transcript content and canonical_name). The list is: 
+  "World & Politics: Geopolitics, current affairs, government, diplomacy, law, human rights",
+  "Society & Culture: Identity, norms, religion, lifestyle, media, social movements",
+  "Science & Environment: Natural sciences, sustainability, climate, biology, earth systems",
+  "Technology & Innovation: AI, software, hardware, digital systems, design, startups",
+  "Economy & Work: Business, finance, markets, labor, economic theory",
+  "History & Philosophy: Historical events, timelines, legacy systems, big ideas, ethics",
+  "Health & Wellbeing: Physical/mental health, medicine, psychology, fitness",
+  "Education & Learning: Schools, pedagogy, study techniques, lifelong learning, research methods".
+Output an array with the chosen category names (e.g., ["Science & Environment", "World & Politics"]). Always select at least one; if no perfect fit, choose the closest match(es).`
 
   const user = `TRANSCRIPT:\n${transcript}\n\nEXTRA INSTRUCTIONS FROM USER (optional): ${
     userPrompt || '(none)'
