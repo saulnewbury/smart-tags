@@ -13,6 +13,8 @@ import { embedText } from '@/utils/openai'
 import { Sidebar } from '@/components/Sidebar'
 import { DetailView } from '@/components/DetailView'
 import { NewSummarizer } from '@/components/NewSummarizer'
+import { uid } from '@/utils/storage'
+import { averageVectors } from '@/utils/vectorMath'
 
 export default function Page() {
   const store = useStore()
@@ -52,27 +54,97 @@ export default function Page() {
     }
   }
 
-  function handleRenameTopic(newName: string) {
-    if (!selectedTopic) return
+  async function handleRenameTopic(newName: string) {
+    if (!selectedTopic || !selectedNote) return
     const sourceId = selectedTopic.id
     const targetName = normalizeTagName(newName)
 
-    ;(async () => {
-      let nameEmb: number[] = []
-      try {
-        nameEmb = await embedText(labelEmbeddingText(targetName))
-      } catch {}
+    let nameEmb: number[] = []
+    try {
+      nameEmb = await embedText(labelEmbeddingText(targetName))
+    } catch {}
 
-      store.setTopics((prev) => {
-        const t = { ...prev[sourceId] } as Topic
+    store.setTopics((prev) => {
+      const updatedTopics = { ...prev }
+
+      if (selectedTopic.summaryIds.length === 1) {
+        // Singleton topic: rename with conditional alias addition
+        const t = { ...updatedTopics[sourceId] } as Topic
+        const oldName = t.name
         if (t.name !== targetName) {
-          if (!t.aliases.includes(t.name)) t.aliases = [...t.aliases, t.name]
+          const normOld = normalizeTagName(oldName)
+          const normSuggested = normalizeTagName(
+            selectedNote.canonicalSuggested
+          )
+          const isInitialSuggested = normOld === normSuggested
+          const matchesExisting = Object.values(prev).some(
+            (otherTopic) =>
+              otherTopic.id !== sourceId &&
+              normalizeTagName(otherTopic.name) === normOld
+          )
+          if (
+            isInitialSuggested &&
+            !matchesExisting &&
+            !t.aliases.includes(oldName)
+          ) {
+            t.aliases = [...t.aliases, oldName]
+          }
           t.name = targetName
         }
         if (nameEmb.length) t.labelEmbedding = nameEmb
-        return { ...prev, [sourceId]: t }
-      })
-    })()
+        updatedTopics[sourceId] = t
+      } else {
+        // Shared topic: split by creating new topic and moving the selected note
+        const oldTopic = { ...updatedTopics[sourceId] } as Topic
+
+        // Create new topic
+        const newTopicId = uid('topic')
+        const noteEmbedding = store.summaries[selectedNote.id].embedding
+        const blended = averageVectors([noteEmbedding, nameEmb])
+        const newTopic: Topic = {
+          id: newTopicId,
+          name: targetName,
+          aliases: [],
+          embedding: blended,
+          labelEmbedding: nameEmb,
+          summaryIds: [selectedNote.id],
+          displayTag: selectedTopic.displayTag // Preserve if desired, or reset
+        }
+        updatedTopics[newTopicId] = newTopic
+
+        // Update old topic: remove note and recompute centroid
+        oldTopic.summaryIds = oldTopic.summaryIds.filter(
+          (id) => id !== selectedNote.id
+        )
+        const remainingVecs = oldTopic.summaryIds.map(
+          (id) => store.summaries[id].embedding
+        )
+        oldTopic.embedding = averageVectors(
+          remainingVecs.length ? remainingVecs : [oldTopic.embedding]
+        ) // Fallback to current if empty
+        updatedTopics[sourceId] = oldTopic
+      }
+
+      return updatedTopics
+    })
+
+    // If split occurred, update the note's topicId (do this after topics update)
+    if (selectedTopic.summaryIds.length > 1) {
+      const newTopicId = Object.keys(store.topics).find(
+        (id) =>
+          store.topics[id].summaryIds.includes(selectedNote.id) &&
+          id !== sourceId
+      )
+      if (newTopicId) {
+        store.setSummaries((prev) => {
+          const updatedSummaries = { ...prev }
+          const note = { ...updatedSummaries[selectedNote.id] }
+          note.topicId = newTopicId
+          updatedSummaries[selectedNote.id] = note
+          return updatedSummaries
+        })
+      }
+    }
   }
 
   function handleUpdateDisplayTag(newDisplayTag: string) {
