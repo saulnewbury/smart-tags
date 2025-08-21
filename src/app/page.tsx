@@ -34,14 +34,21 @@ export default function Page() {
     setBusy(true)
     setError(null)
     try {
-      // First, fetch the transcript from the API route
-      const transcript = await fetchTranscript(args.url)
+      // First, fetch the transcript from the API route with timestamp options
+      const transcriptData = await fetchTranscript(args.url, {
+        includeTimestamps: args.includeTimestamps,
+        timestampFormat: args.timestampFormat
+      })
 
       // Now proceed with summarization using the fetched transcript
       const { noteId } = await addNoteFlow(
         {
-          transcript,
-          userPrompt: args.prompt
+          transcript: transcriptData.text,
+          userPrompt: args.prompt,
+          // Pass through timestamp metadata
+          hasTimestamps: transcriptData.hasTimestamps,
+          timestampFormat: transcriptData.timestampFormat,
+          segments: transcriptData.segments
         },
         store
       )

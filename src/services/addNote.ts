@@ -14,6 +14,14 @@ import {
 } from '../utils/vectorMath'
 import { summarizeToJSON, embedText } from '../utils/openai'
 
+export interface CreateNoteParams {
+  transcript: string
+  userPrompt: string
+  hasTimestamps?: boolean
+  timestampFormat?: string
+  segments?: any[]
+}
+
 const SIMILARITY_THRESHOLD = 0.56 // tune for your content
 
 export async function addNoteFlow(params: CreateNoteParams, store: StoreState) {
@@ -110,7 +118,10 @@ export async function addNoteFlow(params: CreateNoteParams, store: StoreState) {
     topicId,
     canonicalSuggested: canonical_name,
     keywords,
-    subjects // Add this
+    subjects,
+    hasTimestamps: params.hasTimestamps || false,
+    timestampFormat: params.timestampFormat,
+    segments: params.segments
   }
   store.setSummaries((prev) => ({ ...prev, [noteId]: newNote }))
 

@@ -1,6 +1,21 @@
 // services/transcript.ts
 
-export async function fetchTranscript(url: string): Promise<string> {
+interface FetchTranscriptOptions {
+  includeTimestamps?: boolean
+  timestampFormat?: string
+}
+
+export async function fetchTranscript(
+  url: string,
+  options: FetchTranscriptOptions = {}
+): Promise<{
+  text: string
+  hasTimestamps: boolean
+  timestampFormat?: string
+  segments?: any[]
+}> {
+  const { includeTimestamps = false, timestampFormat = 'minutes' } = options
+
   const apiResponse = await fetch('/api/transcript', {
     method: 'POST',
     headers: {
@@ -8,8 +23,8 @@ export async function fetchTranscript(url: string): Promise<string> {
     },
     body: JSON.stringify({
       url: url,
-      include_timestamps: false,
-      timestamp_format: 'seconds'
+      include_timestamps: includeTimestamps,
+      timestamp_format: timestampFormat
     })
   })
 
@@ -25,5 +40,10 @@ export async function fetchTranscript(url: string): Promise<string> {
     throw new Error('No transcript available for this video')
   }
 
-  return transcript
+  return {
+    text: transcript,
+    hasTimestamps: includeTimestamps,
+    timestampFormat: timestampFormat,
+    segments: transcriptData.segments
+  }
 }

@@ -10,6 +10,14 @@ export type Topic = {
   summaryIds: string[]
 }
 
+export interface TranscriptSegment {
+  text: string
+  start: number
+  duration: number
+  end: number
+  timestamp: string
+}
+
 export type NoteSummary = {
   id: string
   createdAt: number
@@ -19,6 +27,11 @@ export type NoteSummary = {
   topicId: string // foreign key -> Topic.id
   canonicalSuggested: string // LLM's first guess (semantic fingerprint)
   keywords: string[]
+  subjects: string[]
+  // New timestamp fields
+  hasTimestamps?: boolean
+  timestampFormat?: string
+  segments?: TranscriptSegment[] // Raw segment data
 }
 
 export interface CreateNoteParams {
@@ -38,6 +51,8 @@ export interface StoreState {
 export interface CreateArgs {
   url: string
   prompt: string
+  includeTimestamps: boolean
+  timestampFormat: 'seconds' | 'minutes' | 'hms'
 }
 
 export interface APIResponse {
