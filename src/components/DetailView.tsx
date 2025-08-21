@@ -15,6 +15,7 @@ interface DetailViewProps {
 export function DetailView(props: DetailViewProps) {
   const [fingerprint, setFingerprint] = useState(props.topic?.name ?? '')
   const [displayTag, setDisplayTag] = useState(props.topic?.displayTag ?? '')
+  const [viewMode, setViewMode] = useState<'summary' | 'transcript'>('summary')
 
   useEffect(() => {
     setFingerprint(props.topic?.name ?? '')
@@ -107,9 +108,32 @@ export function DetailView(props: DetailViewProps) {
         </div>
 
         <div>
-          <div className='text-xs uppercase text-gray-500 mb-2'>Summary</div>
+          <div className='flex gap-2 mb-2'>
+            <button
+              onClick={() => setViewMode('summary')}
+              className={`text-xs uppercase px-3 py-1 rounded-md ${
+                viewMode === 'summary'
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              Summary
+            </button>
+            <button
+              onClick={() => setViewMode('transcript')}
+              className={`text-xs uppercase px-3 py-1 rounded-md ${
+                viewMode === 'transcript'
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              Transcript
+            </button>
+          </div>
           <pre className='whitespace-pre-wrap text-sm leading-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
-            {props.note.summary}
+            {viewMode === 'summary'
+              ? props.note.summary
+              : props.note.transcript}
           </pre>
         </div>
 
