@@ -17,14 +17,21 @@ import { summarizeToJSON, embedText } from '../utils/openai'
 export interface CreateNoteParams {
   transcript: string
   userPrompt: string
-  hasTimestamps?: boolean
-  timestampFormat?: string
   segments?: any[]
+  videoId?: string
+  originalUrl?: string
+  videoTitle?: string
 }
 
 const SIMILARITY_THRESHOLD = 0.56 // tune for your content
 
 export async function addNoteFlow(params: CreateNoteParams, store: StoreState) {
+  console.log('addNoteFlow received params:', {
+    videoId: params.videoId,
+    originalUrl: params.originalUrl,
+    videoTitle: params.videoTitle,
+    hasTranscript: !!params.transcript
+  })
   const { transcript, userPrompt } = params
 
   // 1) Summarize & get initial canonical suggestion
@@ -119,10 +126,16 @@ export async function addNoteFlow(params: CreateNoteParams, store: StoreState) {
     canonicalSuggested: canonical_name,
     keywords,
     subjects,
-    hasTimestamps: params.hasTimestamps || false,
-    timestampFormat: params.timestampFormat,
-    segments: params.segments
+    // Add video metadata
+    segments: params.segments,
+    videoId: params.videoId,
+    originalUrl: params.originalUrl,
+    videoTitle: params.videoTitle
   }
+  console.log('Created note with video data:', {
+    videoId: newNote.videoId,
+    originalUrl: newNote.originalUrl
+  })
   store.setSummaries((prev) => ({ ...prev, [noteId]: newNote }))
 
   // 7) Attach note to topic + update centroid

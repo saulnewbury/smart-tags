@@ -1,21 +1,11 @@
 // services/transcript.ts
 
-interface FetchTranscriptOptions {
-  includeTimestamps?: boolean
-  timestampFormat?: string
-}
-
-export async function fetchTranscript(
-  url: string,
-  options: FetchTranscriptOptions = {}
-): Promise<{
+export async function fetchTranscript(url: string): Promise<{
   text: string
-  hasTimestamps: boolean
-  timestampFormat?: string
   segments?: any[]
+  videoTitle?: string
+  videoId?: string // Add this
 }> {
-  const { includeTimestamps = false, timestampFormat = 'minutes' } = options
-
   const apiResponse = await fetch('/api/transcript', {
     method: 'POST',
     headers: {
@@ -23,8 +13,10 @@ export async function fetchTranscript(
     },
     body: JSON.stringify({
       url: url,
-      include_timestamps: includeTimestamps,
-      timestamp_format: timestampFormat
+      include_timestamps: true, // Always true now
+      timestamp_format: 'minutes', // Always minutes format
+      grouping_strategy: 'smart', // Use smart grouping
+      min_interval: 10 // 10 second minimum intervals
     })
   })
 
@@ -40,10 +32,12 @@ export async function fetchTranscript(
     throw new Error('No transcript available for this video')
   }
 
+  console.log('Transcript API response:', transcriptData) // Debug log
+
   return {
     text: transcript,
-    hasTimestamps: includeTimestamps,
-    timestampFormat: timestampFormat,
-    segments: transcriptData.segments
+    segments: transcriptData.segments,
+    videoTitle: transcriptData.video_title,
+    videoId: transcriptData.video_id // Add this line
   }
 }

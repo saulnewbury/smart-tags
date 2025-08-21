@@ -28,7 +28,6 @@ export type NoteSummary = {
   canonicalSuggested: string // LLM's first guess (semantic fingerprint)
   keywords: string[]
   subjects: string[]
-  // New timestamp fields
   hasTimestamps?: boolean
   timestampFormat?: string
   segments?: TranscriptSegment[] // Raw segment data
@@ -51,8 +50,6 @@ export interface StoreState {
 export interface CreateArgs {
   url: string
   prompt: string
-  includeTimestamps: boolean
-  timestampFormat: 'seconds' | 'minutes' | 'hms'
 }
 
 export interface APIResponse {

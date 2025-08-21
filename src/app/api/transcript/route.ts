@@ -57,8 +57,10 @@ export async function POST(request: NextRequest) {
   try {
     const {
       url,
-      include_timestamps = false,
-      timestamp_format = 'seconds'
+      include_timestamps = true, // Always true now
+      timestamp_format = 'minutes', // Always minutes
+      grouping_strategy = 'smart', // Always smart grouping
+      min_interval = 10
     } = await request.json()
 
     if (!url) {
@@ -110,8 +112,10 @@ export async function POST(request: NextRequest) {
           url: cleanUrl,
           include_timestamps,
           timestamp_format,
+          grouping_strategy,
+          min_interval,
           include_metadata: true,
-          force_fallback: isShorts // Use fallback methods for Shorts
+          force_fallback: isShorts
         }),
         signal: controller.signal
       })

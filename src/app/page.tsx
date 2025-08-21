@@ -30,25 +30,54 @@ export default function Page() {
     ? store.topics[selectedNote.topicId] || null
     : null
 
+  // Update the handleCreate function in your page.tsx
+  // Replace your current handleCreate function in page.tsx with this:
+
   async function handleCreate(args: CreateArgs) {
     setBusy(true)
     setError(null)
     try {
-      // First, fetch the transcript from the API route with timestamp options
-      const transcriptData = await fetchTranscript(args.url, {
-        includeTimestamps: args.includeTimestamps,
-        timestampFormat: args.timestampFormat
-      })
+      // Fetch the transcript (timestamps are now always included)
+      const transcriptData = await fetchTranscript(args.url)
+
+      console.log('Received transcript data:', transcriptData) // Debug log
+
+      // Use video ID from API response, or extract as fallback
+      let videoId = transcriptData.videoId
+      if (!videoId) {
+        // Fallback: extract video ID from URL
+        const extractVideoId = (url: string): string | null => {
+          const patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+            /youtube\.com\/shorts\/([^&\n?#]+)/,
+            /youtube\.com\/v\/([^&\n?#]+)/
+          ]
+
+          for (const pattern of patterns) {
+            const match = url.match(pattern)
+            if (match) return match[1]
+          }
+          return null
+        }
+        videoId = extractVideoId(args.url)
+      }
+
+      console.log('Final video data being passed to addNoteFlow:', {
+        videoId,
+        originalUrl: args.url,
+        videoTitle: transcriptData.videoTitle
+      }) // Debug log
 
       // Now proceed with summarization using the fetched transcript
       const { noteId } = await addNoteFlow(
         {
           transcript: transcriptData.text,
           userPrompt: args.prompt,
-          // Pass through timestamp metadata
-          hasTimestamps: transcriptData.hasTimestamps,
-          timestampFormat: transcriptData.timestampFormat,
-          segments: transcriptData.segments
+          segments: transcriptData.segments,
+          // Pass video information for clickable timestamps
+          videoId: videoId || undefined,
+          originalUrl: args.url,
+          videoTitle: transcriptData.videoTitle || 'YouTube Video'
         },
         store
       )

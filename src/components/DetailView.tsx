@@ -1,8 +1,9 @@
-// components/DetailView.tsx
+// components/DetailView.tsx - Updated version
 
 import React, { useState, useEffect } from 'react'
 import { Save, RefreshCw } from 'lucide-react'
 import type { Topic, NoteSummary } from '../types'
+import { ClickableTranscript } from './ClickableTranscript'
 
 interface DetailViewProps {
   note: NoteSummary | null
@@ -22,6 +23,44 @@ export function DetailView(props: DetailViewProps) {
     setDisplayTag(props.topic?.displayTag ?? '')
   }, [props.topic])
 
+  // Extract video ID from the note's metadata or URL if available
+  const getVideoId = (): string | undefined => {
+    // Debug logging
+    console.log('Note data:', {
+      videoId: props.note?.videoId,
+      originalUrl: props.note?.originalUrl,
+      note: props.note
+    })
+
+    // If you store the video ID in the note metadata
+    if (props.note?.videoId) {
+      console.log('Found videoId in note:', props.note.videoId)
+      return props.note.videoId
+    }
+
+    // If you store the original URL, extract video ID from it
+    if (props.note?.originalUrl) {
+      console.log('Extracting from originalUrl:', props.note.originalUrl)
+      const url = props.note.originalUrl
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+        /youtube\.com\/shorts\/([^&\n?#]+)/,
+        /youtube\.com\/v\/([^&\n?#]+)/
+      ]
+
+      for (const pattern of patterns) {
+        const match = url.match(pattern)
+        if (match) {
+          console.log('Extracted videoId:', match[1])
+          return match[1]
+        }
+      }
+    }
+
+    console.log('No videoId found')
+    return undefined
+  }
+
   if (!props.note || !props.topic) {
     return (
       <div className='flex-1 h-screen flex items-center justify-center text-gray-500'>
@@ -29,6 +68,9 @@ export function DetailView(props: DetailViewProps) {
       </div>
     )
   }
+
+  const videoId = getVideoId()
+  console.log('Final videoId for ClickableTranscript:', videoId)
 
   return (
     <div className='flex-1 h-screen overflow-y-auto'>
@@ -127,14 +169,35 @@ export function DetailView(props: DetailViewProps) {
                   : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             >
-              Transcript
+              Transcript (with clickable timestamps)
             </button>
           </div>
-          <pre className='whitespace-pre-wrap text-sm leading-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
-            {viewMode === 'summary'
-              ? props.note.summary
-              : props.note.transcript}
-          </pre>
+
+          <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
+            {viewMode === 'summary' ? (
+              <pre className='whitespace-pre-wrap text-sm leading-6'>
+                {props.note.summary}
+              </pre>
+            ) : (
+              <ClickableTranscript
+                text={props.note.transcript}
+                videoId={videoId}
+              />
+
+              // <div className='bg-yellow-100 p-2 mb-4 border'>
+              //   <div className='text-sm font-bold'>
+              //     Test ClickableTranscript:
+              //   </div>
+              //   <ClickableTranscript
+              //     text='[0:15] Hello everyone, welcome to this test. [1:30] This should be clickable if everything works.'
+              //     videoId='dQw4w9WgXcQ' // Rick Roll video ID for testing
+              //   />
+              //   <div className='text-xs mt-2'>
+              //     VideoId being passed: {videoId || 'undefined'}
+              //   </div>
+              // </div>
+            )}
+          </div>
         </div>
 
         <div>
