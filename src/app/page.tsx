@@ -5,14 +5,14 @@
 import React, { useState } from 'react'
 import type { Topic, NoteSummary, CreateArgs } from '../types'
 import { useStore } from '@/hooks/useStore'
-import { addNoteFlow } from '@/services/addNote'
+import { addNoteFlowWithStreaming } from '@/services/addNoteFlowWithStreaming'
 import { fetchTranscript } from '@/services/transcript'
 import { clearAllData } from '@/utils/storage'
 import { normalizeTagName, labelEmbeddingText } from '@/utils/textProcessing'
 import { embedText } from '@/utils/openai'
 import { Sidebar } from '@/components/Sidebar'
 import { DetailView } from '@/components/DetailView'
-import { NewSummarizer } from '@/components/NewSummarizer'
+import { NewSummarizerWithStreaming } from '@/components/NewSummarizerWithStreaming'
 import { uid } from '@/utils/storage'
 import { averageVectors } from '@/utils/vectorMath'
 
@@ -23,6 +23,13 @@ export default function Page() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Streaming progress state
+  const [streamingProgress, setStreamingProgress] = useState<{
+    isStreaming: boolean
+    summary: string
+    canonical_name?: string
+  }>({ isStreaming: false, summary: '' })
+
   const selectedNote: NoteSummary | null = selectedNoteId
     ? store.summaries[selectedNoteId] || null
     : null
@@ -30,12 +37,11 @@ export default function Page() {
     ? store.topics[selectedNote.topicId] || null
     : null
 
-  // Update the handleCreate function in your page.tsx
-  // Replace your current handleCreate function in page.tsx with this:
-
   async function handleCreate(args: CreateArgs) {
     setBusy(true)
     setError(null)
+    setStreamingProgress({ isStreaming: false, summary: '' })
+
     try {
       // Fetch the transcript (timestamps are now always included)
       const transcriptData = await fetchTranscript(args.url)
@@ -68,8 +74,8 @@ export default function Page() {
         videoTitle: transcriptData.videoTitle
       }) // Debug log
 
-      // Now proceed with summarization using the fetched transcript
-      const { noteId } = await addNoteFlow(
+      // Now proceed with summarization using the streaming version
+      const { noteId } = await addNoteFlowWithStreaming(
         {
           transcript: transcriptData.text,
           userPrompt: args.prompt,
@@ -79,12 +85,43 @@ export default function Page() {
           originalUrl: args.url,
           videoTitle: transcriptData.videoTitle || 'YouTube Video'
         },
-        store
+        store,
+        {
+          onStreamStart: () => {
+            console.log('Streaming started')
+            setStreamingProgress({ isStreaming: true, summary: '' })
+          },
+          onStreamToken: (token) => {
+            // This is called for each token - could be used for character animation
+            // For now, we'll rely on onStreamPartial for better performance
+          },
+          onStreamPartial: (partial) => {
+            // Update the streaming progress with partial summary
+            setStreamingProgress((prev) => ({
+              ...prev,
+              summary: partial.summary || prev.summary,
+              canonical_name: partial.canonical_name || prev.canonical_name
+            }))
+          },
+          onStreamComplete: () => {
+            console.log('Streaming complete')
+            setStreamingProgress((prev) => ({ ...prev, isStreaming: false }))
+          },
+          onStreamError: (error) => {
+            console.error('Streaming error:', error)
+            setError(error.message)
+            setStreamingProgress({ isStreaming: false, summary: '' })
+          }
+        }
       )
+
       setCreating(false)
       setSelectedNoteId(noteId)
+      // Clear streaming progress after successful creation
+      setStreamingProgress({ isStreaming: false, summary: '' })
     } catch (e: any) {
       setError(e.message || String(e))
+      setStreamingProgress({ isStreaming: false, summary: '' })
     } finally {
       setBusy(false)
     }
@@ -227,7 +264,12 @@ export default function Page() {
       />
 
       {creating ? (
-        <NewSummarizer onCreate={handleCreate} busy={busy} error={error} />
+        <NewSummarizerWithStreaming
+          onCreate={handleCreate}
+          busy={busy}
+          error={error}
+          streamingProgress={streamingProgress}
+        />
       ) : (
         <DetailView
           note={selectedNote}
