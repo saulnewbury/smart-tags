@@ -6,6 +6,10 @@ const API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY || ''
 const SUMMARIZE_MODEL = 'gpt-4o-mini' // fast & inexpensive for prototyping
 const EMBEDDING_MODEL = 'text-embedding-3-small' // great quality/cost
 
+// Control embedding source via environment variable
+const USE_LOCAL_EMBEDDINGS =
+  process.env.NEXT_PUBLIC_USE_LOCAL_EMBEDDINGS === 'true'
+
 export async function summarizeToJSON(
   transcript: string,
   userPrompt: string
@@ -72,7 +76,27 @@ Output an array of 1-3 strings: the primary category name FIRST (e.g., "World & 
   }
 }
 
-export async function embedText(text: string): Promise<number[]> {
+// Local embedding function
+async function embedTextLocal(text: string): Promise<number[]> {
+  const res = await fetch('/api/embed', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ text })
+  })
+
+  if (!res.ok) {
+    const error = await res.text()
+    throw new Error(`Local embedding error: ${res.status} ${error}`)
+  }
+
+  const data = await res.json()
+  return data.embedding
+}
+
+// OpenAI embedding function
+async function embedTextOpenAI(text: string): Promise<number[]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: {
@@ -87,8 +111,43 @@ export async function embedText(text: string): Promise<number[]> {
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`Embedding API error: ${res.status} ${text}`)
+    throw new Error(`OpenAI Embedding API error: ${res.status} ${text}`)
   }
   const data = await res.json()
   return data.data?.[0]?.embedding ?? []
+}
+
+// Main embedding function that routes to local or OpenAI
+export async function embedText(text: string): Promise<number[]> {
+  if (USE_LOCAL_EMBEDDINGS) {
+    console.log('[embedText] Using local embeddings')
+    return embedTextLocal(text)
+  } else {
+    console.log('[embedText] Using OpenAI embeddings')
+    return embedTextOpenAI(text)
+  }
+}
+
+// Optional: Batch embedding function for future optimization
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+  if (USE_LOCAL_EMBEDDINGS) {
+    const res = await fetch('/api/embed', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ texts })
+    })
+
+    if (!res.ok) {
+      throw new Error(`Local batch embedding error: ${res.status}`)
+    }
+
+    const data = await res.json()
+    return data.embeddings
+  } else {
+    // OpenAI doesn't have a batch endpoint, so we call individually
+    // Could be optimized to use Promise.all for parallel calls
+    return Promise.all(texts.map((text) => embedTextOpenAI(text)))
+  }
 }
