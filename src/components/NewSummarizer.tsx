@@ -25,7 +25,7 @@ export function NewSummarizer(props: NewSummarizerProps) {
       </div>
 
       <div className='p-6 space-y-6'>
-        <div>
+        {/* <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>
             Optional prompt
           </div>
@@ -35,7 +35,7 @@ export function NewSummarizer(props: NewSummarizerProps) {
             placeholder='e.g., Focus on actors and outcomes; 5 bullets'
             className='w-full border rounded-lg px-3 py-2'
           />
-        </div>
+        </div> */}
 
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>
