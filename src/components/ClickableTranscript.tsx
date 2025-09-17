@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { ExternalLink } from 'lucide-react'
+import { parseTimestampToSeconds, formatTimestamp } from '@/utils/youtube'
 
 interface ClickableTranscriptProps {
   text: string
@@ -14,10 +15,7 @@ export function ClickableTranscript({
   videoId,
   className = ''
 }: ClickableTranscriptProps) {
-  console.log('ClickableTranscript received:', {
-    videoId,
-    textLength: text.length
-  })
+  console.log('ClickableTranscript rendering with videoId:', videoId)
 
   const parseTimestamps = (text: string) => {
     // Regex to match timestamp patterns: [1:23], [45.2s], [1:23:45], etc.
@@ -35,7 +33,7 @@ export function ClickableTranscript({
         })
       }
 
-      // Parse the timestamp to seconds
+      // Parse the timestamp to seconds using centralized utility
       const timestampText = match[1]
       const seconds = parseTimestampToSeconds(timestampText)
 
@@ -65,35 +63,13 @@ export function ClickableTranscript({
     return parts
   }
 
-  const parseTimestampToSeconds = (timestamp: string): number => {
-    // Remove 's' suffix if present
-    const cleanTimestamp = timestamp.replace(/s$/, '')
-
-    if (cleanTimestamp.includes(':')) {
-      const parts = cleanTimestamp.split(':').map(Number)
-      if (parts.length === 2) {
-        // mm:ss format
-        return parts[0] * 60 + parts[1]
-      } else if (parts.length === 3) {
-        // hh:mm:ss format
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
-      }
-    } else {
-      // Seconds format (45.2 or 45)
-      return parseFloat(cleanTimestamp)
-    }
-
-    return 0
-  }
-
-  const formatTimeForDisplay = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   const parts = parseTimestamps(text)
-  console.log('Parsed parts:', parts.slice(0, 3)) // Log first 3 parts for debugging
+
+  if (!videoId) {
+    console.warn(
+      'ClickableTranscript: No videoId provided, timestamps will not be clickable'
+    )
+  }
 
   return (
     <div className={`whitespace-pre-wrap text-sm leading-6 ${className}`}>
@@ -110,20 +86,27 @@ export function ClickableTranscript({
                 target='_blank'
                 rel='noopener noreferrer'
                 className='inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors duration-200 mx-1'
-                title={`Jump to ${formatTimeForDisplay(
+                title={`Jump to ${formatTimestamp(
                   part.seconds
                 )} in YouTube video`}
               >
                 <span className='text-xs'>
-                  [{formatTimeForDisplay(part.seconds)}]
+                  [{formatTimestamp(part.seconds)}]
                 </span>
                 <ExternalLink className='h-3 w-3 opacity-60' />
               </a>
             )
           } else {
+            // Non-clickable timestamp (no video ID available)
             return (
-              <span key={index} className='text-gray-500 font-medium mx-1'>
-                {part.content}
+              <span
+                key={index}
+                className='text-gray-500 font-medium mx-1'
+                title={
+                  videoId ? undefined : 'Video ID not available for linking'
+                }
+              >
+                [{formatTimestamp(part.seconds)}]
               </span>
             )
           }

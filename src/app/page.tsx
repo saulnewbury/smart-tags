@@ -30,57 +30,32 @@ export default function Page() {
     ? store.topics[selectedNote.topicId] || null
     : null
 
-  // Update the handleCreate function in your page.tsx
-  // Replace your current handleCreate function in page.tsx with this:
-
   async function handleCreate(args: CreateArgs) {
     setBusy(true)
     setError(null)
     try {
-      // Fetch the transcript (timestamps are now always included)
+      // Fetch the transcript - the API now returns video_id reliably
       const transcriptData = await fetchTranscript(args.url)
 
-      console.log('Received transcript data:', transcriptData) // Debug log
+      console.log(
+        'Received transcript data with video ID:',
+        transcriptData.videoId
+      )
 
-      // Use video ID from API response, or extract as fallback
-      let videoId = transcriptData.videoId
-      if (!videoId) {
-        // Fallback: extract video ID from URL
-        const extractVideoId = (url: string): string | null => {
-          const patterns = [
-            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-            /youtube\.com\/shorts\/([^&\n?#]+)/,
-            /youtube\.com\/v\/([^&\n?#]+)/
-          ]
-
-          for (const pattern of patterns) {
-            const match = url.match(pattern)
-            if (match) return match[1]
-          }
-          return null
-        }
-        videoId = extractVideoId(args.url)
-      }
-
-      console.log('Final video data being passed to addNoteFlow:', {
-        videoId,
-        originalUrl: args.url,
-        videoTitle: transcriptData.videoTitle
-      }) // Debug log
-
-      // Now proceed with summarization using the fetched transcript
+      // Pass all the data through to addNoteFlow
+      // No need to extract video ID here - it's already in transcriptData
       const { noteId } = await addNoteFlow(
         {
           transcript: transcriptData.text,
           userPrompt: args.prompt,
           segments: transcriptData.segments,
-          // Pass video information for clickable timestamps
-          videoId: videoId || undefined,
+          videoId: transcriptData.videoId, // Directly from API response
           originalUrl: args.url,
           videoTitle: transcriptData.videoTitle || 'YouTube Video'
         },
         store
       )
+
       setCreating(false)
       setSelectedNoteId(noteId)
     } catch (e: any) {

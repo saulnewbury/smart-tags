@@ -1,9 +1,10 @@
-// components/DetailView.tsx - Updated version
+// components/DetailView.tsx - Simplified version
 
 import React, { useState, useEffect } from 'react'
-import { Save, RefreshCw } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink } from 'lucide-react'
 import type { Topic, NoteSummary } from '../types'
 import { ClickableTranscript } from './ClickableTranscript'
+import { parseYouTubeUrl } from '@/utils/youtube'
 
 interface DetailViewProps {
   note: NoteSummary | null
@@ -23,44 +24,6 @@ export function DetailView(props: DetailViewProps) {
     setDisplayTag(props.topic?.displayTag ?? '')
   }, [props.topic])
 
-  // Extract video ID from the note's metadata or URL if available
-  const getVideoId = (): string | undefined => {
-    // Debug logging
-    console.log('Note data:', {
-      videoId: props.note?.videoId,
-      originalUrl: props.note?.originalUrl,
-      note: props.note
-    })
-
-    // If you store the video ID in the note metadata
-    if (props.note?.videoId) {
-      console.log('Found videoId in note:', props.note.videoId)
-      return props.note.videoId
-    }
-
-    // If you store the original URL, extract video ID from it
-    if (props.note?.originalUrl) {
-      console.log('Extracting from originalUrl:', props.note.originalUrl)
-      const url = props.note.originalUrl
-      const patterns = [
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-        /youtube\.com\/shorts\/([^&\n?#]+)/,
-        /youtube\.com\/v\/([^&\n?#]+)/
-      ]
-
-      for (const pattern of patterns) {
-        const match = url.match(pattern)
-        if (match) {
-          console.log('Extracted videoId:', match[1])
-          return match[1]
-        }
-      }
-    }
-
-    console.log('No videoId found')
-    return undefined
-  }
-
   if (!props.note || !props.topic) {
     return (
       <div className='flex-1 h-screen flex items-center justify-center text-gray-500'>
@@ -69,8 +32,17 @@ export function DetailView(props: DetailViewProps) {
     )
   }
 
-  const videoId = getVideoId()
-  console.log('Final videoId for ClickableTranscript:', videoId)
+  // Video ID should already be in the note data
+  const videoId = props.note.videoId
+  const videoUrl = videoId
+    ? `https://www.youtube.com/watch?v=${videoId}`
+    : props.note.originalUrl
+
+  console.log('DetailView - Video info:', {
+    videoId,
+    originalUrl: props.note.originalUrl,
+    videoTitle: props.note.videoTitle
+  })
 
   return (
     <div className='flex-1 h-screen overflow-y-auto'>
@@ -128,6 +100,39 @@ export function DetailView(props: DetailViewProps) {
       </div>
 
       <div className='p-6 space-y-6'>
+        {/* Video info section if available */}
+        {(props.note.videoTitle || videoUrl) && (
+          <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
+            <div className='text-xs uppercase text-gray-500 mb-2'>
+              Source Video
+            </div>
+            <div className='flex items-start justify-between'>
+              <div>
+                {props.note.videoTitle && (
+                  <div className='font-medium text-sm mb-1'>
+                    {props.note.videoTitle}
+                  </div>
+                )}
+                {videoUrl && (
+                  <a
+                    href={videoUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='text-xs text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1'
+                  >
+                    Open in YouTube <ExternalLink className='h-3 w-3' />
+                  </a>
+                )}
+              </div>
+              {!videoId && (
+                <div className='text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded'>
+                  Video ID missing - timestamps not clickable
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>
             Semantic Fingerprint
@@ -145,7 +150,7 @@ export function DetailView(props: DetailViewProps) {
             Display Tag
           </div>
           <div className='text-lg font-semibold text-blue-600'>
-            {props.topic.displayTag}
+            {props.topic.displayTag || props.topic.name}
           </div>
         </div>
 
@@ -169,7 +174,7 @@ export function DetailView(props: DetailViewProps) {
                   : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             >
-              Transcript (with clickable timestamps)
+              Transcript {videoId ? '(clickable timestamps)' : ''}
             </button>
           </div>
 
@@ -183,19 +188,6 @@ export function DetailView(props: DetailViewProps) {
                 text={props.note.transcript}
                 videoId={videoId}
               />
-
-              // <div className='bg-yellow-100 p-2 mb-4 border'>
-              //   <div className='text-sm font-bold'>
-              //     Test ClickableTranscript:
-              //   </div>
-              //   <ClickableTranscript
-              //     text='[0:15] Hello everyone, welcome to this test. [1:30] This should be clickable if everything works.'
-              //     videoId='dQw4w9WgXcQ' // Rick Roll video ID for testing
-              //   />
-              //   <div className='text-xs mt-2'>
-              //     VideoId being passed: {videoId || 'undefined'}
-              //   </div>
-              // </div>
             )}
           </div>
         </div>
@@ -214,35 +206,37 @@ export function DetailView(props: DetailViewProps) {
           </div>
         </div>
 
-        <div>
-          <div className='text-xs uppercase text-gray-500 mb-2'>
-            Primary Super Category
-          </div>
-          <div className='flex flex-wrap gap-2'>
-            {props.note.subjects?.[0] ? (
-              <span className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600 font-semibold'>
-                {props.note.subjects[0]}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        {props.note.subjects && props.note.subjects.length > 1 && (
-          <div>
-            <div className='text-xs uppercase text-gray-500 mb-2'>
-              Secondary Super Categories
-            </div>
-            <div className='flex flex-wrap gap-2'>
-              {props.note.subjects.slice(1).map((s, i) => (
-                <span
-                  key={i}
-                  className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600'
-                >
-                  {s}
+        {props.note.subjects && props.note.subjects.length > 0 && (
+          <>
+            <div>
+              <div className='text-xs uppercase text-gray-500 mb-2'>
+                Primary Super Category
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <span className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600 font-semibold'>
+                  {props.note.subjects[0]}
                 </span>
-              ))}
+              </div>
             </div>
-          </div>
+
+            {props.note.subjects.length > 1 && (
+              <div>
+                <div className='text-xs uppercase text-gray-500 mb-2'>
+                  Secondary Super Categories
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  {props.note.subjects.slice(1).map((s, i) => (
+                    <span
+                      key={i}
+                      className='text-xs border rounded-full px-2 py-1 bg-white dark:bg-gray-800 text-purple-600'
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
