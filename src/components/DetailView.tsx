@@ -1,7 +1,7 @@
-// components/DetailView.tsx - Simplified version
+// components/DetailView.tsx - Updated with multi-topic support
 
 import React, { useState, useEffect } from 'react'
-import { Save, RefreshCw, ExternalLink } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, Layers } from 'lucide-react'
 import type { Topic, NoteSummary } from '../types'
 import { ClickableTranscript } from './ClickableTranscript'
 import { parseYouTubeUrl } from '@/utils/youtube'
@@ -9,20 +9,52 @@ import { parseYouTubeUrl } from '@/utils/youtube'
 interface DetailViewProps {
   note: NoteSummary | null
   topic: Topic | null
-  onRenameTopic: (newName: string) => void
-  onUpdateDisplayTag: (newDisplayTag: string) => void
+  relatedNotes?: NoteSummary[] // For multi-topic: other notes from same video
+  relatedTopics?: Topic[] // For multi-topic: other topics from same video
+  onRenameTopic: (newName: string, topicId?: string) => void
+  onUpdateDisplayTag: (newDisplayTag: string, topicId?: string) => void
   onResummarize?: () => void
 }
 
+interface TopicRow {
+  topicId: string
+  fingerprint: string
+  displayTag: string
+  isSecondary?: boolean
+  prominence?: number
+}
+
 export function DetailView(props: DetailViewProps) {
-  const [fingerprint, setFingerprint] = useState(props.topic?.name ?? '')
-  const [displayTag, setDisplayTag] = useState(props.topic?.displayTag ?? '')
+  const [primaryRow, setPrimaryRow] = useState<TopicRow | null>(null)
+  const [secondaryRows, setSecondaryRows] = useState<TopicRow[]>([])
   const [viewMode, setViewMode] = useState<'summary' | 'transcript'>('summary')
 
+  // Initialize or update topic rows when props change
   useEffect(() => {
-    setFingerprint(props.topic?.name ?? '')
-    setDisplayTag(props.topic?.displayTag ?? '')
-  }, [props.topic])
+    if (props.topic) {
+      setPrimaryRow({
+        topicId: props.topic.id,
+        fingerprint: props.topic.name,
+        displayTag: props.topic.displayTag ?? '',
+        prominence: props.note?.prominence
+      })
+    }
+
+    // If we have related topics (multi-topic scenario)
+    if (props.relatedTopics && props.relatedTopics.length > 0) {
+      setSecondaryRows(
+        props.relatedTopics.map((topic, idx) => ({
+          topicId: topic.id,
+          fingerprint: topic.name,
+          displayTag: topic.displayTag ?? '',
+          isSecondary: true,
+          prominence: props.relatedNotes?.[idx]?.prominence
+        }))
+      )
+    } else {
+      setSecondaryRows([])
+    }
+  }, [props.topic, props.relatedTopics, props.note, props.relatedNotes])
 
   if (!props.note || !props.topic) {
     return (
@@ -32,63 +64,119 @@ export function DetailView(props: DetailViewProps) {
     )
   }
 
-  // Video ID should already be in the note data
   const videoId = props.note.videoId
   const videoUrl = videoId
     ? `https://www.youtube.com/watch?v=${videoId}`
     : props.note.originalUrl
+  const isMultiTopic = secondaryRows.length > 0
 
-  console.log('DetailView - Video info:', {
-    videoId,
-    originalUrl: props.note.originalUrl,
-    videoTitle: props.note.videoTitle
-  })
+  const handleSaveRow = (row: TopicRow) => {
+    props.onRenameTopic(row.fingerprint, row.topicId)
+    props.onUpdateDisplayTag(row.displayTag, row.topicId)
 
-  return (
-    <div className='flex-1 h-screen overflow-y-auto'>
-      <div className='p-4 border-b space-y-3'>
-        <div className='flex items-center gap-2'>
+    // Update local state to reflect saved values
+    if (row.topicId === primaryRow?.topicId) {
+      setPrimaryRow({ ...row })
+    } else {
+      setSecondaryRows((rows) =>
+        rows.map((r) => (r.topicId === row.topicId ? { ...row } : r))
+      )
+    }
+  }
+
+  const renderTopicRow = (row: TopicRow, index: number = 0) => {
+    const updateRow = (updates: Partial<TopicRow>) => {
+      if (row.topicId === primaryRow?.topicId) {
+        setPrimaryRow({ ...row, ...updates })
+      } else {
+        setSecondaryRows((rows) =>
+          rows.map((r) =>
+            r.topicId === row.topicId ? { ...r, ...updates } : r
+          )
+        )
+      }
+    }
+
+    return (
+      <div
+        key={row.topicId}
+        className={`
+          border rounded-lg p-4 
+          ${
+            row.isSecondary
+              ? 'bg-gray-50 dark:bg-gray-800'
+              : 'bg-white dark:bg-gray-900'
+          }
+        `}
+      >
+        {row.isSecondary && (
+          <div className='text-xs uppercase text-gray-500 mb-3 flex items-center gap-2'>
+            <Layers className='h-3 w-3' />
+            Secondary Topic {index}
+            {row.prominence && (
+              <span className='text-gray-400'>
+                ({Math.round(row.prominence)}% of content)
+              </span>
+            )}
+          </div>
+        )}
+
+        {!row.isSecondary && isMultiTopic && (
+          <div className='text-xs uppercase text-gray-500 mb-3 flex items-center gap-2'>
+            <Layers className='h-3 w-3' />
+            Primary Topic
+            {row.prominence && (
+              <span className='text-gray-400'>
+                ({Math.round(row.prominence)}% of content)
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className='flex gap-3 items-end'>
           <div className='flex-1'>
             <div className='text-xs uppercase text-gray-500 mb-1'>
               Semantic Fingerprint
             </div>
             <input
-              value={fingerprint}
-              onChange={(e) => setFingerprint(e.target.value)}
+              value={row.fingerprint}
+              onChange={(e) => updateRow({ fingerprint: e.target.value })}
               className='w-full border rounded-lg px-3 py-2'
               placeholder='Semantic fingerprint for AI matching...'
             />
           </div>
-          <button
-            onClick={() => props.onRenameTopic(fingerprint)}
-            className='inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 mt-5'
-          >
-            <Save className='h-4 w-4' /> Save Fingerprint
-          </button>
-        </div>
 
-        <div className='flex items-center gap-2'>
           <div className='flex-1'>
             <div className='text-xs uppercase text-gray-500 mb-1'>
               Display Tag
             </div>
             <input
-              value={displayTag}
-              onChange={(e) => setDisplayTag(e.target.value)}
+              value={row.displayTag}
+              onChange={(e) => updateRow({ displayTag: e.target.value })}
               className='w-full border rounded-lg px-3 py-2'
-              placeholder='Human-readable tag for organization...'
+              placeholder='Human-readable tag...'
             />
           </div>
+
           <button
-            onClick={() => props.onUpdateDisplayTag(displayTag)}
-            className='inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 mt-5'
+            onClick={() => handleSaveRow(row)}
+            className='inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800'
           >
-            <Save className='h-4 w-4' /> Save Tag
+            <Save className='h-4 w-4' /> Save Both
           </button>
         </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className='flex-1 h-screen overflow-y-auto'>
+      <div className='p-4 border-b space-y-3'>
+        {primaryRow && renderTopicRow(primaryRow)}
+        {secondaryRows.map((row, idx) => renderTopicRow(row, idx + 1))}
 
         {props.onResummarize && (
-          <div className='flex justify-end'>
+          <div className='flex justify-end pt-2'>
             <button
               onClick={props.onResummarize}
               className='inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-gray-50'
@@ -100,7 +188,7 @@ export function DetailView(props: DetailViewProps) {
       </div>
 
       <div className='p-6 space-y-6'>
-        {/* Video info section if available */}
+        {/* Video info section */}
         {(props.note.videoTitle || videoUrl) && (
           <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
             <div className='text-xs uppercase text-gray-500 mb-2'>
@@ -130,12 +218,19 @@ export function DetailView(props: DetailViewProps) {
                 </div>
               )}
             </div>
+            {isMultiTopic && (
+              <div className='mt-2 pt-2 border-t text-xs text-gray-600'>
+                <Layers className='h-3 w-3 inline mr-1' />
+                This video contains {secondaryRows.length + 1} distinct topics
+              </div>
+            )}
           </div>
         )}
 
+        {/* Current topic info */}
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>
-            Semantic Fingerprint
+            Current Topic: Semantic Fingerprint
           </div>
           <div className='text-lg font-semibold'>{props.topic.name}</div>
           {props.topic.aliases.length > 0 && (
@@ -147,13 +242,14 @@ export function DetailView(props: DetailViewProps) {
 
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>
-            Display Tag
+            Current Topic: Display Tag
           </div>
           <div className='text-lg font-semibold text-blue-600'>
             {props.topic.displayTag || props.topic.name}
           </div>
         </div>
 
+        {/* View mode toggle and content */}
         <div>
           <div className='flex gap-2 mb-2'>
             <button
@@ -180,9 +276,32 @@ export function DetailView(props: DetailViewProps) {
 
           <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
             {viewMode === 'summary' ? (
-              <pre className='whitespace-pre-wrap text-sm leading-6'>
-                {props.note.summary}
-              </pre>
+              <div>
+                <pre className='whitespace-pre-wrap text-sm leading-6'>
+                  {props.note.summary}
+                </pre>
+                {/* Show other topic summaries if in multi-topic mode */}
+                {isMultiTopic && props.relatedNotes && (
+                  <div className='mt-6 pt-4 border-t space-y-4'>
+                    <div className='text-xs uppercase text-gray-500'>
+                      Other Topics from This Video:
+                    </div>
+                    {props.relatedNotes.map((note, idx) => (
+                      <div
+                        key={note.id}
+                        className='pl-4 border-l-2 border-gray-300'
+                      >
+                        <div className='text-sm font-medium mb-1'>
+                          {secondaryRows[idx]?.fingerprint}
+                        </div>
+                        <pre className='whitespace-pre-wrap text-sm leading-5 text-gray-600'>
+                          {note.summary}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <ClickableTranscript
                 text={props.note.transcript}
@@ -192,6 +311,7 @@ export function DetailView(props: DetailViewProps) {
           </div>
         </div>
 
+        {/* Keywords */}
         <div>
           <div className='text-xs uppercase text-gray-500 mb-2'>Keywords</div>
           <div className='flex flex-wrap gap-2'>
@@ -206,6 +326,7 @@ export function DetailView(props: DetailViewProps) {
           </div>
         </div>
 
+        {/* Categories */}
         {props.note.subjects && props.note.subjects.length > 0 && (
           <>
             <div>

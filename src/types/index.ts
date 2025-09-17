@@ -1,60 +1,65 @@
-// types/index.ts
+// types.ts - Updated with multi-topic support
 
-export type Topic = {
+export interface Topic {
   id: string
-  name: string // semantic fingerprint (canonical)
-  displayTag: string // human-readable tag for organization
+  name: string // Semantic fingerprint (normalized)
+  displayTag?: string // Human-readable display name
   aliases: string[]
-  embedding: number[] // centroid of summaries
-  labelEmbedding?: number[] // embedding of canonical name (fingerprint)
+  embedding: number[]
+  labelEmbedding?: number[]
   summaryIds: string[]
+  exemplarIds?: string[] // For future: IDs of best examples
 }
 
-export interface TranscriptSegment {
-  text: string
-  start: number
-  duration: number
-  end: number
-  timestamp: string
-}
-
-export type NoteSummary = {
+export interface NoteSummary {
   id: string
   createdAt: number
   transcript: string
   summary: string
-  embedding: number[] // embedding of the summary text
-  topicId: string // foreign key -> Topic.id
-  canonicalSuggested: string // LLM's first guess (semantic fingerprint)
+  fullSummary?: string // For multi-topic: overall video summary (stored on primary)
+  embedding: number[]
+  topicId: string
+  canonicalSuggested: string
   keywords: string[]
   subjects: string[]
-  hasTimestamps?: boolean
-  timestampFormat?: string
-  segments?: TranscriptSegment[] // Raw segment data
-}
-
-export interface CreateNoteParams {
-  transcript: string
-  userPrompt: string
-}
-
-export interface StoreState {
-  topics: Record<string, Topic>
-  setTopics: React.Dispatch<React.SetStateAction<Record<string, Topic>>>
-  summaries: Record<string, NoteSummary>
-  setSummaries: React.Dispatch<
-    React.SetStateAction<Record<string, NoteSummary>>
-  >
-}
-
-export interface CreateArgs {
-  url: string
-  prompt: string
+  segments?: any[]
+  videoId?: string
+  originalUrl?: string
+  videoTitle?: string
+  prominence?: number // For multi-topic: % of content (0-100)
+  videoGroupId?: string // For multi-topic: links notes from same video
+  isPrimary?: boolean // For multi-topic: is this the primary topic
 }
 
 export interface APIResponse {
   summary: string
   canonical_name: string
   keywords: string[]
-  subjects: string[]
+}
+
+export interface CreateArgs {
+  url: string
+  prompt: string
+  multiTopic?: boolean
+}
+
+export interface CreateNoteParams {
+  transcript: string
+  userPrompt: string
+  segments?: any[]
+  videoId?: string
+  originalUrl?: string
+  videoTitle?: string
+  multiTopic?: boolean
+}
+
+export interface StoreState {
+  topics: Record<string, Topic>
+  summaries: Record<string, NoteSummary>
+  setTopics: (
+    setter: (prev: Record<string, Topic>) => Record<string, Topic>
+  ) => void
+  setSummaries: (
+    setter: (prev: Record<string, NoteSummary>) => Record<string, NoteSummary>
+  ) => void
 }

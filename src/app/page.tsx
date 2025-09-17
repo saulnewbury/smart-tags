@@ -1,4 +1,4 @@
-// app/page.tsx
+// app/page.tsx - Updated with multi-topic support
 
 'use client'
 
@@ -19,7 +19,7 @@ import { averageVectors } from '@/utils/vectorMath'
 export default function Page() {
   const store = useStore()
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [creating, setCreating] = useState<boolean>(true) // start on creator view
+  const [creating, setCreating] = useState<boolean>(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,34 +30,64 @@ export default function Page() {
     ? store.topics[selectedNote.topicId] || null
     : null
 
+  // Get related notes and topics if this is part of a multi-topic video
+  const getRelatedNotesAndTopics = () => {
+    if (!selectedNote?.videoGroupId) {
+      return { relatedNotes: [], relatedTopics: [] }
+    }
+
+    const relatedNotes = Object.values(store.summaries)
+      .filter(
+        (n) =>
+          n.videoGroupId === selectedNote.videoGroupId &&
+          n.id !== selectedNote.id &&
+          !n.isPrimary // Only get secondary topics
+      )
+      .sort((a, b) => (b.prominence || 0) - (a.prominence || 0))
+
+    const relatedTopics = relatedNotes
+      .map((n) => store.topics[n.topicId])
+      .filter(Boolean)
+
+    return { relatedNotes, relatedTopics }
+  }
+
+  const { relatedNotes, relatedTopics } = getRelatedNotesAndTopics()
+
   async function handleCreate(args: CreateArgs) {
     setBusy(true)
     setError(null)
     try {
-      // Fetch the transcript - the API now returns video_id reliably
+      // Fetch the transcript
       const transcriptData = await fetchTranscript(args.url)
 
-      console.log(
-        'Received transcript data with video ID:',
-        transcriptData.videoId
-      )
+      console.log('Creating note with multi-topic:', args.multiTopic)
 
-      // Pass all the data through to addNoteFlow
-      // No need to extract video ID here - it's already in transcriptData
-      const { noteId } = await addNoteFlow(
+      // Pass all data including multiTopic flag
+      const { noteIds, topicIds } = await addNoteFlow(
         {
           transcript: transcriptData.text,
           userPrompt: args.prompt,
           segments: transcriptData.segments,
-          videoId: transcriptData.videoId, // Directly from API response
+          videoId: transcriptData.videoId,
           originalUrl: args.url,
-          videoTitle: transcriptData.videoTitle || 'YouTube Video'
+          videoTitle: transcriptData.videoTitle || 'YouTube Video',
+          multiTopic: args.multiTopic || false
         },
         store
       )
 
       setCreating(false)
-      setSelectedNoteId(noteId)
+      // Select the primary note (first one)
+      setSelectedNoteId(noteIds[0])
+
+      if (args.multiTopic && noteIds.length > 1) {
+        console.log(
+          `Created ${noteIds.length} notes across ${
+            new Set(topicIds).size
+          } topics`
+        )
+      }
     } catch (e: any) {
       setError(e.message || String(e))
     } finally {
@@ -65,9 +95,13 @@ export default function Page() {
     }
   }
 
-  async function handleRenameTopic(newName: string) {
-    if (!selectedTopic || !selectedNote) return
-    const sourceId = selectedTopic.id
+  async function handleRenameTopic(newName: string, topicId?: string) {
+    const targetTopicId = topicId || selectedTopic?.id
+    if (!targetTopicId || !selectedNote) return
+
+    const targetTopic = store.topics[targetTopicId]
+    if (!targetTopic) return
+
     const targetName = normalizeTagName(newName)
 
     let nameEmb: number[] = []
@@ -77,40 +111,32 @@ export default function Page() {
 
     store.setTopics((prev) => {
       const updatedTopics = { ...prev }
+      const topic = { ...updatedTopics[targetTopicId] } as Topic
 
-      if (selectedTopic.summaryIds.length === 1) {
-        // Singleton topic: rename with conditional alias addition
-        const t = { ...updatedTopics[sourceId] } as Topic
-        const oldName = t.name
-        if (t.name !== targetName) {
+      if (topic.summaryIds.length === 1) {
+        // Singleton topic: simple rename
+        const oldName = topic.name
+        if (topic.name !== targetName) {
           const normOld = normalizeTagName(oldName)
-          const normSuggested = normalizeTagName(
-            selectedNote.canonicalSuggested
-          )
-          const isInitialSuggested = normOld === normSuggested
           const matchesExisting = Object.values(prev).some(
             (otherTopic) =>
-              otherTopic.id !== sourceId &&
+              otherTopic.id !== targetTopicId &&
               normalizeTagName(otherTopic.name) === normOld
           )
-          if (
-            isInitialSuggested &&
-            !matchesExisting &&
-            !t.aliases.includes(oldName)
-          ) {
-            t.aliases = [...t.aliases, oldName]
+          if (!matchesExisting && !topic.aliases.includes(oldName)) {
+            topic.aliases = [...topic.aliases, oldName]
           }
-          t.name = targetName
+          topic.name = targetName
         }
-        if (nameEmb.length) t.labelEmbedding = nameEmb
-        updatedTopics[sourceId] = t
+        if (nameEmb.length) topic.labelEmbedding = nameEmb
+        updatedTopics[targetTopicId] = topic
       } else {
-        // Shared topic: split by creating new topic and moving the selected note
-        const oldTopic = { ...updatedTopics[sourceId] } as Topic
+        // Shared topic: split by creating new topic for this note
+        const noteToMove = store.summaries[selectedNote.id]
 
         // Create new topic
         const newTopicId = uid('topic')
-        const noteEmbedding = store.summaries[selectedNote.id].embedding
+        const noteEmbedding = noteToMove.embedding
         const blended = averageVectors([noteEmbedding, nameEmb])
         const newTopic: Topic = {
           id: newTopicId,
@@ -119,34 +145,23 @@ export default function Page() {
           embedding: blended,
           labelEmbedding: nameEmb,
           summaryIds: [selectedNote.id],
-          displayTag: selectedTopic.displayTag // Preserve if desired, or reset
+          displayTag: topic.displayTag
         }
         updatedTopics[newTopicId] = newTopic
 
         // Update old topic: remove note and recompute centroid
-        oldTopic.summaryIds = oldTopic.summaryIds.filter(
+        topic.summaryIds = topic.summaryIds.filter(
           (id) => id !== selectedNote.id
         )
-        const remainingVecs = oldTopic.summaryIds.map(
+        const remainingVecs = topic.summaryIds.map(
           (id) => store.summaries[id].embedding
         )
-        oldTopic.embedding = averageVectors(
-          remainingVecs.length ? remainingVecs : [oldTopic.embedding]
-        ) // Fallback to current if empty
-        updatedTopics[sourceId] = oldTopic
-      }
+        topic.embedding = averageVectors(
+          remainingVecs.length ? remainingVecs : [topic.embedding]
+        )
+        updatedTopics[targetTopicId] = topic
 
-      return updatedTopics
-    })
-
-    // If split occurred, update the note's topicId (do this after topics update)
-    if (selectedTopic.summaryIds.length > 1) {
-      const newTopicId = Object.keys(store.topics).find(
-        (id) =>
-          store.topics[id].summaryIds.includes(selectedNote.id) &&
-          id !== sourceId
-      )
-      if (newTopicId) {
+        // Update the note's topicId
         store.setSummaries((prev) => {
           const updatedSummaries = { ...prev }
           const note = { ...updatedSummaries[selectedNote.id] }
@@ -155,18 +170,21 @@ export default function Page() {
           return updatedSummaries
         })
       }
-    }
+
+      return updatedTopics
+    })
   }
 
-  function handleUpdateDisplayTag(newDisplayTag: string) {
-    if (!selectedTopic) return
-    const sourceId = selectedTopic.id
+  function handleUpdateDisplayTag(newDisplayTag: string, topicId?: string) {
+    const targetTopicId = topicId || selectedTopic?.id
+    if (!targetTopicId) return
+
     const trimmedTag = newDisplayTag.trim()
 
     store.setTopics((prev) => {
-      const t = { ...prev[sourceId] } as Topic
+      const t = { ...prev[targetTopicId] } as Topic
       t.displayTag = trimmedTag
-      return { ...prev, [sourceId]: t }
+      return { ...prev, [targetTopicId]: t }
     })
   }
 
@@ -207,6 +225,8 @@ export default function Page() {
         <DetailView
           note={selectedNote}
           topic={selectedTopic}
+          relatedNotes={relatedNotes}
+          relatedTopics={relatedTopics}
           onRenameTopic={handleRenameTopic}
           onUpdateDisplayTag={handleUpdateDisplayTag}
         />
