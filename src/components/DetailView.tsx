@@ -1,7 +1,7 @@
-// components/DetailView.tsx - Simplified version
+// components/DetailView.tsx - Updated with size indicator
 
 import React, { useState, useEffect } from 'react'
-import { Save, RefreshCw, ExternalLink } from 'lucide-react'
+import { Save, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react'
 import type { Topic, NoteSummary } from '../types'
 import { ClickableTranscript } from './ClickableTranscript'
 import { parseYouTubeUrl } from '@/utils/youtube'
@@ -12,6 +12,11 @@ interface DetailViewProps {
   onRenameTopic: (newName: string) => void
   onUpdateDisplayTag: (newDisplayTag: string) => void
   onResummarize?: () => void
+  topicSizeInfo?: {
+    size: number
+    isSoftCapped: boolean
+    isHardCapped: boolean
+  } | null
 }
 
 export function DetailView(props: DetailViewProps) {
@@ -100,6 +105,36 @@ export function DetailView(props: DetailViewProps) {
       </div>
 
       <div className='p-6 space-y-6'>
+        {/* Topic size indicator */}
+        {props.topicSizeInfo && (
+          <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>
+            <div className='flex items-center justify-between'>
+              <div>
+                <div className='text-xs uppercase text-gray-500 mb-1'>
+                  Topic Cluster Size
+                </div>
+                <div className='flex items-center gap-2'>
+                  <span className='text-lg font-semibold'>
+                    {props.topicSizeInfo.size} notes
+                  </span>
+                  {props.topicSizeInfo.isHardCapped && (
+                    <span className='text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded flex items-center gap-1'>
+                      <AlertCircle className='h-3 w-3' />
+                      At capacity (oldest outliers will be replaced)
+                    </span>
+                  )}
+                  {props.topicSizeInfo.isSoftCapped &&
+                    !props.topicSizeInfo.isHardCapped && (
+                      <span className='text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded'>
+                        Soft-capped (higher similarity required)
+                      </span>
+                    )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Video info section if available */}
         {(props.note.videoTitle || videoUrl) && (
           <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border'>

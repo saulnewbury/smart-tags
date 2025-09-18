@@ -5,7 +5,7 @@
 import React, { useState } from 'react'
 import type { Topic, NoteSummary, CreateArgs } from '../types'
 import { useStore } from '@/hooks/useStore'
-import { addNoteFlow } from '@/services/addNote'
+import { addNoteFlow, reassignNoteToTopic } from '@/services/addNote'
 import { fetchTranscript } from '@/services/transcript'
 import { clearAllData } from '@/utils/storage'
 import { normalizeTagName, labelEmbeddingText } from '@/utils/textProcessing'
@@ -15,6 +15,9 @@ import { DetailView } from '@/components/DetailView'
 import { NewSummarizer } from '@/components/NewSummarizer'
 import { uid } from '@/utils/storage'
 import { averageVectors } from '@/utils/vectorMath'
+
+// Cluster size constants (matching addNote.ts)
+const HARD_CAP = 10
 
 export default function Page() {
   const store = useStore()
@@ -105,57 +108,61 @@ export default function Page() {
         if (nameEmb.length) t.labelEmbedding = nameEmb
         updatedTopics[sourceId] = t
       } else {
-        // Shared topic: split by creating new topic and moving the selected note
-        const oldTopic = { ...updatedTopics[sourceId] } as Topic
+        // Shared topic: Instead of always splitting, check if target topic exists
+        const existingTargetTopic = Object.values(updatedTopics).find(
+          (t) => normalizeTagName(t.name) === targetName && t.id !== sourceId
+        )
 
-        // Create new topic
-        const newTopicId = uid('topic')
-        const noteEmbedding = store.summaries[selectedNote.id].embedding
-        const blended = averageVectors([noteEmbedding, nameEmb])
-        const newTopic: Topic = {
-          id: newTopicId,
-          name: targetName,
-          aliases: [],
-          embedding: blended,
-          labelEmbedding: nameEmb,
-          summaryIds: [selectedNote.id],
-          displayTag: selectedTopic.displayTag // Preserve if desired, or reset
+        if (existingTargetTopic) {
+          // Move note to existing topic (will handle eviction if needed)
+          console.log(
+            `Moving note to existing topic: ${existingTargetTopic.id}`
+          )
+          reassignNoteToTopic(selectedNote.id, existingTargetTopic.id, store)
+        } else {
+          // Create new topic for this note (split from original)
+          const oldTopic = { ...updatedTopics[sourceId] } as Topic
+
+          // Create new topic
+          const newTopicId = uid('topic')
+          const noteEmbedding = store.summaries[selectedNote.id].embedding
+          const blended = averageVectors([noteEmbedding, nameEmb])
+          const newTopic: Topic = {
+            id: newTopicId,
+            name: targetName,
+            aliases: [],
+            embedding: blended,
+            labelEmbedding: nameEmb,
+            summaryIds: [selectedNote.id],
+            displayTag: selectedTopic.displayTag // Preserve if desired, or reset
+          }
+          updatedTopics[newTopicId] = newTopic
+
+          // Update old topic: remove note and recompute centroid
+          oldTopic.summaryIds = oldTopic.summaryIds.filter(
+            (id) => id !== selectedNote.id
+          )
+          const remainingVecs = oldTopic.summaryIds.map(
+            (id) => store.summaries[id].embedding
+          )
+          oldTopic.embedding = averageVectors(
+            remainingVecs.length ? remainingVecs : [oldTopic.embedding]
+          ) // Fallback to current if empty
+          updatedTopics[sourceId] = oldTopic
+
+          // Update the note's topicId
+          store.setSummaries((prev) => {
+            const updatedSummaries = { ...prev }
+            const note = { ...updatedSummaries[selectedNote.id] }
+            note.topicId = newTopicId
+            updatedSummaries[selectedNote.id] = note
+            return updatedSummaries
+          })
         }
-        updatedTopics[newTopicId] = newTopic
-
-        // Update old topic: remove note and recompute centroid
-        oldTopic.summaryIds = oldTopic.summaryIds.filter(
-          (id) => id !== selectedNote.id
-        )
-        const remainingVecs = oldTopic.summaryIds.map(
-          (id) => store.summaries[id].embedding
-        )
-        oldTopic.embedding = averageVectors(
-          remainingVecs.length ? remainingVecs : [oldTopic.embedding]
-        ) // Fallback to current if empty
-        updatedTopics[sourceId] = oldTopic
       }
 
       return updatedTopics
     })
-
-    // If split occurred, update the note's topicId (do this after topics update)
-    if (selectedTopic.summaryIds.length > 1) {
-      const newTopicId = Object.keys(store.topics).find(
-        (id) =>
-          store.topics[id].summaryIds.includes(selectedNote.id) &&
-          id !== sourceId
-      )
-      if (newTopicId) {
-        store.setSummaries((prev) => {
-          const updatedSummaries = { ...prev }
-          const note = { ...updatedSummaries[selectedNote.id] }
-          note.topicId = newTopicId
-          updatedSummaries[selectedNote.id] = note
-          return updatedSummaries
-        })
-      }
-    }
   }
 
   function handleUpdateDisplayTag(newDisplayTag: string) {
@@ -184,6 +191,15 @@ export default function Page() {
     setCreating(true)
   }
 
+  // Helper to get topic size info for display
+  function getTopicSizeInfo(topic: Topic | null) {
+    if (!topic) return null
+    const size = topic.summaryIds.length
+    const isSoftCapped = size >= 6
+    const isHardCapped = size >= HARD_CAP
+    return { size, isSoftCapped, isHardCapped }
+  }
+
   return (
     <div className='flex'>
       <Sidebar
@@ -209,6 +225,7 @@ export default function Page() {
           topic={selectedTopic}
           onRenameTopic={handleRenameTopic}
           onUpdateDisplayTag={handleUpdateDisplayTag}
+          topicSizeInfo={getTopicSizeInfo(selectedTopic)}
         />
       )}
     </div>
